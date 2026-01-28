@@ -1087,10 +1087,145 @@ def get_dashboard_acoes_ganhas_perdidas(df: pd.DataFrame) -> Dict[str, Any]:
     - Perdidas: Pagamento Condenação, Acordo Pós Sentença, Condenação Sem Ônus
     - Acordo Antes Sentença: casos específicos (com gráfico de economia)
     """
-    encerrados_mask = _is_encerrado(df)
-    encerrados = df[encerrados_mask].copy()
+    import logging
+    logger = logging.getLogger(__name__)
     
-    if len(encerrados) == 0:
+    try:
+        logger.info('get_dashboard_acoes_ganhas_perdidas: Iniciando processamento')
+        logger.info(f'get_dashboard_acoes_ganhas_perdidas: DataFrame tem {len(df)} registros')
+        
+        encerrados_mask = _is_encerrado(df)
+        encerrados = df[encerrados_mask].copy()
+        
+        logger.info(f'get_dashboard_acoes_ganhas_perdidas: Encontrados {len(encerrados)} registros encerrados')
+        
+        if len(encerrados) == 0:
+            logger.warning('get_dashboard_acoes_ganhas_perdidas: Nenhum registro encerrado encontrado')
+            return {
+                'ganhas': {'quantidade': 0, 'percentual': 0.0, 'valor_pretendido_total': 0.0},
+                'perdidas': {'quantidade': 0, 'percentual': 0.0, 'valor_pretendido_total': 0.0},
+                'acordo_antes_sentenca': {
+                    'quantidade': 0,
+                    'percentual': 0.0,
+                    'valor_pretendido_total': 0.0,
+                    'valor_acordo_total': 0.0,
+                    'economia_total': 0.0,
+                    'detalhes': []
+                },
+                'total': 0
+            }
+        
+        # Normalizar motivo_encerramento para análise
+        if 'motivo_encerramento' not in encerrados.columns:
+            encerrados['motivo_encerramento'] = ''
+        encerrados['motivo_normalizado'] = encerrados['motivo_encerramento'].astype(str).str.lower().str.strip()
+        
+        # Valor pretendido (valor da causa)
+        if 'valor_causa' in encerrados.columns:
+            encerrados['valor_pretendido'] = pd.to_numeric(encerrados['valor_causa'], errors='coerce').fillna(0)
+        else:
+            encerrados['valor_pretendido'] = pd.to_numeric(encerrados['impacto_financeiro'], errors='coerce').fillna(0)
+        
+        # Valor do acordo (se houver coluna específica)
+        if 'valor_acordo' in encerrados.columns:
+            encerrados['valor_acordo_real'] = pd.to_numeric(encerrados['valor_acordo'], errors='coerce').fillna(0)
+        else:
+            encerrados['valor_acordo_real'] = 0
+        
+        # Classificar casos
+        # Ganhas: Extinção, Improcedência
+        ganhas_mask = (
+            encerrados['motivo_normalizado'].str.contains('extinção|extincao|extinto', case=False, na=False) |
+            encerrados['motivo_normalizado'].str.contains('improcedência|improcedencia|improcedente', case=False, na=False) |
+            encerrados['sentenca'].str.contains('Favorável', case=False, na=False)
+        )
+        
+        # Acordo Antes Sentença (verificar se há indicação de acordo antes da sentença)
+        acordo_antes_mask = (
+            encerrados['motivo_normalizado'].str.contains('acordo.*antes|antes.*sentença|antes.*sentenca', case=False, na=False) |
+            (encerrados['motivo_normalizado'].str.contains('acordo', case=False, na=False) & 
+             ~encerrados['motivo_normalizado'].str.contains('pós|pos|depois', case=False, na=False))
+        )
+        
+        # Perdidas: Pagamento Condenação, Acordo Pós Sentença, Condenação Sem Ônus
+        perdidas_mask = (
+            encerrados['motivo_normalizado'].str.contains('pagamento.*condenação|pagamento.*condenacao', case=False, na=False) |
+            encerrados['motivo_normalizado'].str.contains('acordo.*pós|acordo.*pos|acordo.*depois|pós.*sentença|pos.*sentenca', case=False, na=False) |
+            encerrados['motivo_normalizado'].str.contains('condenação.*sem.*ônus|condenacao.*sem.*onus', case=False, na=False) |
+            encerrados['sentenca'].str.contains('Desfavorável', case=False, na=False)
+        )
+        
+        # Remover acordo antes sentença das perdidas se estiver classificado
+        perdidas_mask = perdidas_mask & ~acordo_antes_mask
+        
+        # Calcular estatísticas
+        ganhas = encerrados[ganhas_mask].copy()
+        perdidas = encerrados[perdidas_mask].copy()
+        acordo_antes = encerrados[acordo_antes_mask].copy()
+        
+        total_encerrados = len(encerrados)
+        
+        # Ganhas
+        qtd_ganhas = len(ganhas)
+        valor_pretendido_ganhas = ganhas['valor_pretendido'].sum() if len(ganhas) > 0 else 0.0
+        percentual_ganhas = (qtd_ganhas / total_encerrados * 100) if total_encerrados > 0 else 0.0
+        
+        # Perdidas
+        qtd_perdidas = len(perdidas)
+        valor_pretendido_perdidas = perdidas['valor_pretendido'].sum() if len(perdidas) > 0 else 0.0
+        percentual_perdidas = (qtd_perdidas / total_encerrados * 100) if total_encerrados > 0 else 0.0
+        
+        # Acordo Antes Sentença
+        qtd_acordo_antes = len(acordo_antes)
+        valor_pretendido_acordo = acordo_antes['valor_pretendido'].sum() if len(acordo_antes) > 0 else 0.0
+        valor_acordo_total = acordo_antes['valor_acordo_real'].sum() if len(acordo_antes) > 0 else 0.0
+        # Se não houver valor_acordo_real, usar impacto_financeiro como aproximação
+        if valor_acordo_total == 0 and len(acordo_antes) > 0:
+            valor_acordo_total = acordo_antes['impacto_financeiro'].sum() * 0.5  # Estimativa: 50% do valor pretendido
+        economia_total = valor_pretendido_acordo - valor_acordo_total
+        percentual_acordo_antes = (qtd_acordo_antes / total_encerrados * 100) if total_encerrados > 0 else 0.0
+        
+        # Detalhes do acordo antes sentença
+        detalhes_acordo = []
+        if len(acordo_antes) > 0:
+            for _, row in acordo_antes.iterrows():
+                detalhes_acordo.append({
+                    'numero_processo': str(row.get('numero_processo', 'N/A')),
+                    'nome_cliente': str(row.get('nome_cliente', 'N/A')),
+                    'valor_pretendido': float(_json_safe(row.get('valor_pretendido', 0))),
+                    'valor_acordo': float(_json_safe(row.get('valor_acordo_real', 0) if row.get('valor_acordo_real', 0) > 0 else row.get('impacto_financeiro', 0) * 0.5)),
+                    'economia': float(_json_safe(row.get('valor_pretendido', 0) - (row.get('valor_acordo_real', 0) if row.get('valor_acordo_real', 0) > 0 else row.get('impacto_financeiro', 0) * 0.5)))
+                })
+        
+        result = {
+            'ganhas': {
+                'quantidade': int(qtd_ganhas),
+                'percentual': float(_json_safe(percentual_ganhas)),
+                'valor_pretendido_total': float(_json_safe(valor_pretendido_ganhas))
+            },
+            'perdidas': {
+                'quantidade': int(qtd_perdidas),
+                'percentual': float(_json_safe(percentual_perdidas)),
+                'valor_pretendido_total': float(_json_safe(valor_pretendido_perdidas))
+            },
+            'acordo_antes_sentenca': {
+                'quantidade': int(qtd_acordo_antes),
+                'percentual': float(_json_safe(percentual_acordo_antes)),
+                'valor_pretendido_total': float(_json_safe(valor_pretendido_acordo)),
+                'valor_acordo_total': float(_json_safe(valor_acordo_total)),
+                'economia_total': float(_json_safe(economia_total)),
+                'detalhes': _sanitize_for_json(detalhes_acordo)
+            },
+            'total': int(total_encerrados)
+        }
+        
+        logger.info(f'get_dashboard_acoes_ganhas_perdidas: Resultado - Ganhas: {qtd_ganhas}, Perdidas: {qtd_perdidas}, Acordo Antes: {qtd_acordo_antes}, Total: {total_encerrados}')
+        logger.debug(f'get_dashboard_acoes_ganhas_perdidas: Estrutura retornada: {list(result.keys())}')
+        
+        return result
+    except Exception as e:
+        logger.error(f'get_dashboard_acoes_ganhas_perdidas: Erro ao processar dados: {str(e)}', exc_info=True)
+        # Retornar estrutura vazia em caso de erro
         return {
             'ganhas': {'quantidade': 0, 'percentual': 0.0, 'valor_pretendido_total': 0.0},
             'perdidas': {'quantidade': 0, 'percentual': 0.0, 'valor_pretendido_total': 0.0},
@@ -1104,110 +1239,6 @@ def get_dashboard_acoes_ganhas_perdidas(df: pd.DataFrame) -> Dict[str, Any]:
             },
             'total': 0
         }
-    
-    # Normalizar motivo_encerramento para análise
-    if 'motivo_encerramento' not in encerrados.columns:
-        encerrados['motivo_encerramento'] = ''
-    encerrados['motivo_normalizado'] = encerrados['motivo_encerramento'].astype(str).str.lower().str.strip()
-    
-    # Valor pretendido (valor da causa)
-    if 'valor_causa' in encerrados.columns:
-        encerrados['valor_pretendido'] = pd.to_numeric(encerrados['valor_causa'], errors='coerce').fillna(0)
-    else:
-        encerrados['valor_pretendido'] = pd.to_numeric(encerrados['impacto_financeiro'], errors='coerce').fillna(0)
-    
-    # Valor do acordo (se houver coluna específica)
-    if 'valor_acordo' in encerrados.columns:
-        encerrados['valor_acordo_real'] = pd.to_numeric(encerrados['valor_acordo'], errors='coerce').fillna(0)
-    else:
-        encerrados['valor_acordo_real'] = 0
-    
-    # Classificar casos
-    # Ganhas: Extinção, Improcedência
-    ganhas_mask = (
-        encerrados['motivo_normalizado'].str.contains('extinção|extincao|extinto', case=False, na=False) |
-        encerrados['motivo_normalizado'].str.contains('improcedência|improcedencia|improcedente', case=False, na=False) |
-        encerrados['sentenca'].str.contains('Favorável', case=False, na=False)
-    )
-    
-    # Acordo Antes Sentença (verificar se há indicação de acordo antes da sentença)
-    acordo_antes_mask = (
-        encerrados['motivo_normalizado'].str.contains('acordo.*antes|antes.*sentença|antes.*sentenca', case=False, na=False) |
-        (encerrados['motivo_normalizado'].str.contains('acordo', case=False, na=False) & 
-         ~encerrados['motivo_normalizado'].str.contains('pós|pos|depois', case=False, na=False))
-    )
-    
-    # Perdidas: Pagamento Condenação, Acordo Pós Sentença, Condenação Sem Ônus
-    perdidas_mask = (
-        encerrados['motivo_normalizado'].str.contains('pagamento.*condenação|pagamento.*condenacao', case=False, na=False) |
-        encerrados['motivo_normalizado'].str.contains('acordo.*pós|acordo.*pos|acordo.*depois|pós.*sentença|pos.*sentenca', case=False, na=False) |
-        encerrados['motivo_normalizado'].str.contains('condenação.*sem.*ônus|condenacao.*sem.*onus', case=False, na=False) |
-        encerrados['sentenca'].str.contains('Desfavorável', case=False, na=False)
-    )
-    
-    # Remover acordo antes sentença das perdidas se estiver classificado
-    perdidas_mask = perdidas_mask & ~acordo_antes_mask
-    
-    # Calcular estatísticas
-    ganhas = encerrados[ganhas_mask].copy()
-    perdidas = encerrados[perdidas_mask].copy()
-    acordo_antes = encerrados[acordo_antes_mask].copy()
-    
-    total_encerrados = len(encerrados)
-    
-    # Ganhas
-    qtd_ganhas = len(ganhas)
-    valor_pretendido_ganhas = ganhas['valor_pretendido'].sum() if len(ganhas) > 0 else 0.0
-    percentual_ganhas = (qtd_ganhas / total_encerrados * 100) if total_encerrados > 0 else 0.0
-    
-    # Perdidas
-    qtd_perdidas = len(perdidas)
-    valor_pretendido_perdidas = perdidas['valor_pretendido'].sum() if len(perdidas) > 0 else 0.0
-    percentual_perdidas = (qtd_perdidas / total_encerrados * 100) if total_encerrados > 0 else 0.0
-    
-    # Acordo Antes Sentença
-    qtd_acordo_antes = len(acordo_antes)
-    valor_pretendido_acordo = acordo_antes['valor_pretendido'].sum() if len(acordo_antes) > 0 else 0.0
-    valor_acordo_total = acordo_antes['valor_acordo_real'].sum() if len(acordo_antes) > 0 else 0.0
-    # Se não houver valor_acordo_real, usar impacto_financeiro como aproximação
-    if valor_acordo_total == 0 and len(acordo_antes) > 0:
-        valor_acordo_total = acordo_antes['impacto_financeiro'].sum() * 0.5  # Estimativa: 50% do valor pretendido
-    economia_total = valor_pretendido_acordo - valor_acordo_total
-    percentual_acordo_antes = (qtd_acordo_antes / total_encerrados * 100) if total_encerrados > 0 else 0.0
-    
-    # Detalhes do acordo antes sentença
-    detalhes_acordo = []
-    if len(acordo_antes) > 0:
-        for _, row in acordo_antes.iterrows():
-            detalhes_acordo.append({
-                'numero_processo': str(row.get('numero_processo', 'N/A')),
-                'nome_cliente': str(row.get('nome_cliente', 'N/A')),
-                'valor_pretendido': float(_json_safe(row.get('valor_pretendido', 0))),
-                'valor_acordo': float(_json_safe(row.get('valor_acordo_real', 0) if row.get('valor_acordo_real', 0) > 0 else row.get('impacto_financeiro', 0) * 0.5)),
-                'economia': float(_json_safe(row.get('valor_pretendido', 0) - (row.get('valor_acordo_real', 0) if row.get('valor_acordo_real', 0) > 0 else row.get('impacto_financeiro', 0) * 0.5)))
-            })
-    
-    return {
-        'ganhas': {
-            'quantidade': int(qtd_ganhas),
-            'percentual': float(_json_safe(percentual_ganhas)),
-            'valor_pretendido_total': float(_json_safe(valor_pretendido_ganhas))
-        },
-        'perdidas': {
-            'quantidade': int(qtd_perdidas),
-            'percentual': float(_json_safe(percentual_perdidas)),
-            'valor_pretendido_total': float(_json_safe(valor_pretendido_perdidas))
-        },
-        'acordo_antes_sentenca': {
-            'quantidade': int(qtd_acordo_antes),
-            'percentual': float(_json_safe(percentual_acordo_antes)),
-            'valor_pretendido_total': float(_json_safe(valor_pretendido_acordo)),
-            'valor_acordo_total': float(_json_safe(valor_acordo_total)),
-            'economia_total': float(_json_safe(economia_total)),
-            'detalhes': _sanitize_for_json(detalhes_acordo)
-        },
-        'total': int(total_encerrados)
-    }
 
 
 def get_casos_objetos_por_uf(df: pd.DataFrame) -> Dict[str, Any]:

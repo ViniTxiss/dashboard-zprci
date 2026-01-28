@@ -3323,20 +3323,89 @@ async function renderSlideImpacto(filtro = null, estadoFiltro = null) {
     }
 }
 
+// Função auxiliar para aguardar Chart.js estar carregado
+async function waitForChartJS(maxWait = 5000) {
+    if (typeof Chart !== 'undefined') {
+        return true;
+    }
+    
+    const startTime = Date.now();
+    while (Date.now() - startTime < maxWait) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+        if (typeof Chart !== 'undefined') {
+            return true;
+        }
+    }
+    return false;
+}
+
+// Função auxiliar para exibir erro no canvas
+function showChartError(canvasId, message) {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) return;
+    
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    
+    // Garantir dimensões mínimas
+    if (canvas.width === 0 || canvas.height === 0) {
+        canvas.width = 400;
+        canvas.height = 300;
+    }
+    
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#666';
+    ctx.font = '14px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(message, canvas.width / 2, canvas.height / 2);
+    ctx.fillText('Verifique o console para mais detalhes', canvas.width / 2, canvas.height / 2 + 20);
+}
+
 // Gráfico de Ações Ganhas/Perdidas
 async function renderAcoesGanhasPerdidasChart() {
+    const canvasId = 'chart-acoes-ganhas-perdidas';
+    
     try {
-        // Verificar se Chart.js está disponível
-        if (typeof Chart === 'undefined') {
-            console.error('renderAcoesGanhasPerdidasChart: Chart.js não está carregado!');
+        console.log('renderAcoesGanhasPerdidasChart: Iniciando...');
+        
+        // Aguardar Chart.js estar carregado
+        const chartJSReady = await waitForChartJS();
+        if (!chartJSReady) {
+            console.error('renderAcoesGanhasPerdidasChart: Chart.js não está carregado após timeout!');
+            showChartError(canvasId, 'Erro: Chart.js não carregado');
             return;
         }
         
-        const data = await api.getAcoesGanhasPerdidas();
+        console.log('renderAcoesGanhasPerdidasChart: Chart.js carregado, buscando dados...');
         
-        if (!data) {
-            console.warn('renderAcoesGanhasPerdidasChart: dados vazios');
+        // Buscar dados da API
+        let data;
+        try {
+            data = await api.getAcoesGanhasPerdidas();
+            console.log('renderAcoesGanhasPerdidasChart: Dados recebidos:', data);
+        } catch (apiError) {
+            console.error('renderAcoesGanhasPerdidasChart: Erro ao buscar dados da API:', apiError);
+            showChartError(canvasId, `Erro ao buscar dados: ${apiError.message || 'Erro desconhecido'}`);
             return;
+        }
+        
+        // Validação robusta de estrutura de dados
+        if (!data || typeof data !== 'object') {
+            console.error('renderAcoesGanhasPerdidasChart: Dados inválidos (não é objeto):', data);
+            showChartError(canvasId, 'Erro: Dados inválidos da API');
+            return;
+        }
+        
+        // Validar estrutura esperada
+        if (!data.ganhas || typeof data.ganhas !== 'object') {
+            data.ganhas = { quantidade: 0, percentual: 0.0 };
+        }
+        if (!data.perdidas || typeof data.perdidas !== 'object') {
+            data.perdidas = { quantidade: 0, percentual: 0.0 };
+        }
+        if (!data.acordo_antes_sentenca || typeof data.acordo_antes_sentenca !== 'object') {
+            data.acordo_antes_sentenca = { quantidade: 0, percentual: 0.0, economia_total: 0.0 };
         }
         
         // Atualizar KPIs
@@ -3355,16 +3424,19 @@ async function renderAcoesGanhasPerdidasChart() {
         if (kpiEconomia) kpiEconomia.textContent = `Economia: ${formatCurrency(data.acordo_antes_sentenca?.economia_total || 0)}`;
         
         // Verificar se há dados para exibir
-        const qtdGanhas = data.ganhas?.quantidade || 0;
-        const qtdPerdidas = data.perdidas?.quantidade || 0;
+        const qtdGanhas = Number(data.ganhas?.quantidade) || 0;
+        const qtdPerdidas = Number(data.perdidas?.quantidade) || 0;
         
         if (qtdGanhas === 0 && qtdPerdidas === 0) {
             console.warn('renderAcoesGanhasPerdidasChart: Nenhum dado para exibir (ambos valores são zero)');
+            showChartError(canvasId, 'Nenhum dado disponível para exibir');
             return;
         }
         
+        console.log('renderAcoesGanhasPerdidasChart: Criando gráfico com dados:', { qtdGanhas, qtdPerdidas });
+        
         // Gráfico de pizza: Ganhas vs Perdidas
-        const chart = createChart('chart-acoes-ganhas-perdidas', {
+        const chart = await createChartWithRetry(canvasId, {
             type: 'pie',
             data: {
                 labels: ['Ações Ganhas', 'Ações Perdidas'],
@@ -3432,43 +3504,80 @@ async function renderAcoesGanhasPerdidasChart() {
         });
         
         if (!chart) {
-            console.error('renderAcoesGanhasPerdidasChart: Falha ao criar gráfico');
+            console.error('renderAcoesGanhasPerdidasChart: Falha ao criar gráfico após retry');
+            showChartError(canvasId, 'Erro ao criar gráfico. Tente recarregar a página.');
+        } else {
+            console.log('renderAcoesGanhasPerdidasChart: Gráfico criado com sucesso');
         }
     } catch (error) {
-        console.error('renderAcoesGanhasPerdidasChart:', error);
+        console.error('renderAcoesGanhasPerdidasChart: Erro inesperado:', error);
+        showChartError(canvasId, `Erro: ${error.message || 'Erro desconhecido'}`);
     }
 }
 
 // Gráfico de Economia do Acordo Antes da Sentença
 async function renderAcordoAntesSentencaChart() {
+    const canvasId = 'chart-acordo-antes-sentenca';
+    
     try {
-        // Verificar se Chart.js está disponível
-        if (typeof Chart === 'undefined') {
-            console.error('renderAcordoAntesSentencaChart: Chart.js não está carregado!');
+        console.log('renderAcordoAntesSentencaChart: Iniciando...');
+        
+        // Aguardar Chart.js estar carregado
+        const chartJSReady = await waitForChartJS();
+        if (!chartJSReady) {
+            console.error('renderAcordoAntesSentencaChart: Chart.js não está carregado após timeout!');
+            showChartError(canvasId, 'Erro: Chart.js não carregado');
             return;
         }
         
-        const data = await api.getAcoesGanhasPerdidas();
+        console.log('renderAcordoAntesSentencaChart: Chart.js carregado, buscando dados...');
         
-        if (!data || !data.acordo_antes_sentenca) {
-            console.warn('renderAcordoAntesSentencaChart: dados vazios');
+        // Buscar dados da API
+        let data;
+        try {
+            data = await api.getAcoesGanhasPerdidas();
+            console.log('renderAcordoAntesSentencaChart: Dados recebidos:', data);
+        } catch (apiError) {
+            console.error('renderAcordoAntesSentencaChart: Erro ao buscar dados da API:', apiError);
+            showChartError(canvasId, `Erro ao buscar dados: ${apiError.message || 'Erro desconhecido'}`);
             return;
+        }
+        
+        // Validação robusta de estrutura de dados
+        if (!data || typeof data !== 'object') {
+            console.error('renderAcordoAntesSentencaChart: Dados inválidos (não é objeto):', data);
+            showChartError(canvasId, 'Erro: Dados inválidos da API');
+            return;
+        }
+        
+        if (!data.acordo_antes_sentenca || typeof data.acordo_antes_sentenca !== 'object') {
+            console.warn('renderAcordoAntesSentencaChart: acordo_antes_sentenca não encontrado ou inválido');
+            data.acordo_antes_sentenca = {
+                quantidade: 0,
+                percentual: 0.0,
+                valor_pretendido_total: 0.0,
+                valor_acordo_total: 0.0,
+                economia_total: 0.0
+            };
         }
         
         const acordoData = data.acordo_antes_sentenca;
         
         // Verificar se há dados para exibir
-        const valorPretendido = acordoData.valor_pretendido_total || 0;
-        const valorAcordo = acordoData.valor_acordo_total || 0;
-        const economia = acordoData.economia_total || 0;
+        const valorPretendido = Number(acordoData.valor_pretendido_total) || 0;
+        const valorAcordo = Number(acordoData.valor_acordo_total) || 0;
+        const economia = Number(acordoData.economia_total) || 0;
         
         if (valorPretendido === 0 && valorAcordo === 0 && economia === 0) {
             console.warn('renderAcordoAntesSentencaChart: Nenhum dado para exibir (todos valores são zero)');
+            showChartError(canvasId, 'Nenhum dado disponível para exibir');
             return;
         }
         
+        console.log('renderAcordoAntesSentencaChart: Criando gráfico com dados:', { valorPretendido, valorAcordo, economia });
+        
         // Gráfico de barras comparando valor pretendido vs valor do acordo
-        const chart = createChart('chart-acordo-antes-sentenca', {
+        const chart = await createChartWithRetry(canvasId, {
             type: 'bar',
             data: {
                 labels: ['Valor Pretendido', 'Valor do Acordo', 'Economia'],
@@ -3529,10 +3638,14 @@ async function renderAcordoAntesSentencaChart() {
         });
         
         if (!chart) {
-            console.error('renderAcordoAntesSentencaChart: Falha ao criar gráfico');
+            console.error('renderAcordoAntesSentencaChart: Falha ao criar gráfico após retry');
+            showChartError(canvasId, 'Erro ao criar gráfico. Tente recarregar a página.');
+        } else {
+            console.log('renderAcordoAntesSentencaChart: Gráfico criado com sucesso');
         }
     } catch (error) {
-        console.error('renderAcordoAntesSentencaChart:', error);
+        console.error('renderAcordoAntesSentencaChart: Erro inesperado:', error);
+        showChartError(canvasId, `Erro: ${error.message || 'Erro desconhecido'}`);
     }
 }
 

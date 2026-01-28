@@ -422,12 +422,57 @@ async def acoes_ganhas_perdidas(estado: Optional[str] = Query(None, description=
     além de acordo antes da sentença com economia.
     """
     try:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"acoes_ganhas_perdidas: Requisição recebida (estado={estado})")
+        
         loader = get_loader()
         df = loader.get_dataframe()
+        logger.info(f"acoes_ganhas_perdidas: DataFrame carregado com {len(df)} registros")
+        
         df = _filter_by_state(df, estado)
-        return get_dashboard_acoes_ganhas_perdidas(df)
+        if estado:
+            logger.info(f"acoes_ganhas_perdidas: Filtrado por estado {estado}, {len(df)} registros restantes")
+        
+        result = get_dashboard_acoes_ganhas_perdidas(df)
+        
+        # Validar estrutura de resposta
+        required_keys = ['ganhas', 'perdidas', 'acordo_antes_sentenca', 'total']
+        for key in required_keys:
+            if key not in result:
+                logger.error(f"acoes_ganhas_perdidas: Chave '{key}' ausente no resultado")
+                raise ValueError(f"Estrutura de resposta inválida: chave '{key}' ausente")
+        
+        # Validar estrutura de objetos aninhados
+        for key in ['ganhas', 'perdidas']:
+            if not isinstance(result[key], dict):
+                logger.error(f"acoes_ganhas_perdidas: '{key}' não é um dicionário")
+                raise ValueError(f"Estrutura inválida: '{key}' deve ser um dicionário")
+            required_subkeys = ['quantidade', 'percentual', 'valor_pretendido_total']
+            for subkey in required_subkeys:
+                if subkey not in result[key]:
+                    logger.error(f"acoes_ganhas_perdidas: Chave '{key}.{subkey}' ausente")
+                    raise ValueError(f"Estrutura inválida: '{key}.{subkey}' ausente")
+        
+        if not isinstance(result['acordo_antes_sentenca'], dict):
+            logger.error("acoes_ganhas_perdidas: 'acordo_antes_sentenca' não é um dicionário")
+            raise ValueError("Estrutura inválida: 'acordo_antes_sentenca' deve ser um dicionário")
+        
+        required_acordo_keys = ['quantidade', 'percentual', 'valor_pretendido_total', 'valor_acordo_total', 'economia_total', 'detalhes']
+        for key in required_acordo_keys:
+            if key not in result['acordo_antes_sentenca']:
+                logger.error(f"acoes_ganhas_perdidas: Chave 'acordo_antes_sentenca.{key}' ausente")
+                raise ValueError(f"Estrutura inválida: 'acordo_antes_sentenca.{key}' ausente")
+        
+        logger.info(f"acoes_ganhas_perdidas: Resposta validada e retornada com sucesso")
+        return result
+        
+    except HTTPException:
+        raise
     except Exception as e:
         import traceback
         error_detail = f"{str(e)}\n{traceback.format_exc()}"
+        logger = logging.getLogger(__name__)
+        logger.error(f"ERRO em acoes_ganhas_perdidas: {error_detail}")
         print(f"ERRO em acoes_ganhas_perdidas: {error_detail}")
         raise HTTPException(status_code=500, detail=str(e))

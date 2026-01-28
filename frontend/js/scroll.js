@@ -524,23 +524,79 @@ class ScrollController {
 
     async loadAcoesGanhasPerdidas() {
         console.log('loadAcoesGanhasPerdidas: Iniciando carregamento...');
-        if (window.chartFunctions) {
-            console.log('loadAcoesGanhasPerdidas: chartFunctions encontrado');
-            try {
-                await window.chartFunctions.renderAcoesGanhasPerdidasChart();
-                console.log('loadAcoesGanhasPerdidas: renderAcoesGanhasPerdidasChart concluído');
-            } catch (error) {
-                console.error('loadAcoesGanhasPerdidas: Erro ao renderizar gráfico de ações ganhas/perdidas:', error);
-            }
-            try {
-                await window.chartFunctions.renderAcordoAntesSentencaChart();
-                console.log('loadAcoesGanhasPerdidas: renderAcordoAntesSentencaChart concluído');
-            } catch (error) {
-                console.error('loadAcoesGanhasPerdidas: Erro ao renderizar gráfico de acordo antes sentença:', error);
-            }
-        } else {
+        
+        // Verificar se chartFunctions está disponível
+        if (!window.chartFunctions) {
             console.error('loadAcoesGanhasPerdidas: window.chartFunctions não encontrado!');
+            // Tentar aguardar um pouco e verificar novamente
+            await new Promise(resolve => setTimeout(resolve, 500));
+            if (!window.chartFunctions) {
+                console.error('loadAcoesGanhasPerdidas: window.chartFunctions ainda não disponível após espera');
+                return;
+            }
         }
+        
+        // Verificar se a seção está visível
+        const section = document.getElementById('dashboard-acoes-ganhas-perdidas');
+        if (!section) {
+            console.error('loadAcoesGanhasPerdidas: Seção não encontrada no DOM');
+            return;
+        }
+        
+        // Aguardar seção estar visível
+        const waitForVisible = async (element, maxWait = 3000) => {
+            const startTime = Date.now();
+            while (Date.now() - startTime < maxWait) {
+                const rect = element.getBoundingClientRect();
+                if (rect.width > 0 && rect.height > 0 && 
+                    rect.top < window.innerHeight && 
+                    rect.bottom > 0) {
+                    return true;
+                }
+                await new Promise(resolve => setTimeout(resolve, 100));
+            }
+            return false;
+        };
+        
+        const isVisible = await waitForVisible(section);
+        if (!isVisible) {
+            console.warn('loadAcoesGanhasPerdidas: Seção não está visível, mas continuando...');
+        }
+        
+        // Verificar se os canvas existem
+        const canvas1 = document.getElementById('chart-acoes-ganhas-perdidas');
+        const canvas2 = document.getElementById('chart-acordo-antes-sentenca');
+        
+        if (!canvas1) {
+            console.error('loadAcoesGanhasPerdidas: Canvas chart-acoes-ganhas-perdidas não encontrado');
+        }
+        if (!canvas2) {
+            console.error('loadAcoesGanhasPerdidas: Canvas chart-acordo-antes-sentenca não encontrado');
+        }
+        
+        console.log('loadAcoesGanhasPerdidas: chartFunctions encontrado, renderizando gráficos...');
+        
+        // Renderizar primeiro gráfico
+        try {
+            await window.chartFunctions.renderAcoesGanhasPerdidasChart();
+            console.log('loadAcoesGanhasPerdidas: renderAcoesGanhasPerdidasChart concluído');
+        } catch (error) {
+            console.error('loadAcoesGanhasPerdidas: Erro ao renderizar gráfico de ações ganhas/perdidas:', error);
+            // Não retornar aqui, continuar com o próximo gráfico
+        }
+        
+        // Aguardar um pouco antes de renderizar o segundo gráfico
+        await new Promise(resolve => setTimeout(resolve, 200));
+        
+        // Renderizar segundo gráfico
+        try {
+            await window.chartFunctions.renderAcordoAntesSentencaChart();
+            console.log('loadAcoesGanhasPerdidas: renderAcordoAntesSentencaChart concluído');
+        } catch (error) {
+            console.error('loadAcoesGanhasPerdidas: Erro ao renderizar gráfico de acordo antes sentença:', error);
+        }
+        
+        console.log('loadAcoesGanhasPerdidas: Carregamento concluído');
     }
 
     async loadEvolucao() {

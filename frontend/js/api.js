@@ -26,15 +26,81 @@ class APIClient {
             const separator = url.includes('?') ? '&' : '?';
             const estadoParam = estadoSelecionado ? `${separator}estado=${encodeURIComponent(estadoSelecionado)}` : '';
             const fullUrl = `${API_BASE_URL}${url}${estadoParam}`;
-            const response = await fetch(fullUrl);
-            const data = await response.json().catch(() => ({}));
+            
+            console.log(`APIClient.get: Buscando ${fullUrl}`);
+            
+            const response = await fetch(fullUrl, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+            });
+            
+            // Verificar status HTTP
             if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
+                const errorText = await response.text().catch(() => 'Erro desconhecido');
+                let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+                
+                // Tentar parsear como JSON para obter mensagem de erro mais detalhada
+                try {
+                    const errorJson = JSON.parse(errorText);
+                    if (errorJson.detail) {
+                        errorMessage = errorJson.detail;
+                    }
+                } catch (e) {
+                    // Se não for JSON, usar o texto como está
+                    if (errorText && errorText.length < 200) {
+                        errorMessage = errorText;
+                    }
+                }
+                
+                const error = new Error(errorMessage);
+                error.status = response.status;
+                error.statusText = response.statusText;
+                throw error;
             }
+            
+            // Verificar se a resposta tem conteúdo
+            const contentType = response.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {
+                console.warn(`APIClient.get: Resposta não é JSON para ${url}, content-type: ${contentType}`);
+            }
+            
+            // Parsear JSON
+            let data;
+            try {
+                const text = await response.text();
+                if (!text || text.trim().length === 0) {
+                    console.warn(`APIClient.get: Resposta vazia para ${url}`);
+                    return {};
+                }
+                data = JSON.parse(text);
+            } catch (parseError) {
+                console.error(`APIClient.get: Erro ao parsear JSON de ${url}:`, parseError);
+                throw new Error(`Resposta inválida da API: não é JSON válido`);
+            }
+            
+            console.log(`APIClient.get: Dados recebidos de ${url}:`, data);
             return data;
+            
         } catch (error) {
-            console.error(`Erro ao buscar ${url}:`, error);
-            throw error;
+            // Melhorar mensagens de erro baseadas no tipo
+            if (error.name === 'TypeError' && error.message.includes('fetch')) {
+                // Erro de rede ou CORS
+                const networkError = new Error(`Erro de rede: Não foi possível conectar ao servidor. Verifique se o backend está rodando em ${API_BASE_URL}`);
+                networkError.isNetworkError = true;
+                networkError.originalError = error;
+                console.error(`APIClient.get: Erro de rede ao buscar ${url}:`, networkError);
+                throw networkError;
+            } else if (error.status) {
+                // Erro HTTP
+                console.error(`APIClient.get: Erro HTTP ${error.status} ao buscar ${url}:`, error.message);
+                throw error;
+            } else {
+                // Outros erros
+                console.error(`APIClient.get: Erro ao buscar ${url}:`, error);
+                throw error;
+            }
         }
     }
     
