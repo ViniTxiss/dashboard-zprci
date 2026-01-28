@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: dashboard-backend
+    runtime: python
+    buildCommand: python -m pip install --upgrade pip && pip install -r requirements.txt
+    startCommand: export PYTHONPATH="${PYTHONPATH}:." && gunicorn backend.app:app -w 4 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT --pythonpath .
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
+      - key: ENVIRONMENT
+        value: production
+      - key: ALLOWED_ORIGINS
+        value: https://seu-projeto.vercel.app
+    healthCheckPath: /health

@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Executivo </title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+      // Configurar URL da API baseada no ambiente
+      (function() {
+        const isLocalhost = window.location.hostname === 'localhost' || 
+                            window.location.hostname === '127.0.0.1';
+        
+        if (isLocalhost) {
+          window.API_BASE_URL = 'http://localhost:8001/api';
+        } else {
+          // Em produção, usar a URL do Render
+          // Esta URL será substituída pela variável de ambiente do Vercel ou configurada manualmente
+          window.API_BASE_URL = window.API_BASE_URL || 
+                                'https://seu-backend.onrender.com/api';
+        }
+      })();
+    </script>
+</head>
+<body>
+    <!-- CAPA INSTITUCIONAL -->
+    <section class="slide" id="capa">
+        <div class="slide-content">
+            <div class="logo-container" data-animate="step" data-delay="0">
+                <img src="assets/logos/mobilize_logo.png" alt="MOBILIZE FINANCIAL SERVICES" class="logo-img">
+            </div>
+            <h1 class="slide-title" data-animate="step" data-delay="150">ANÁLISE</h1>
+            <p class="slide-subtitle" data-animate="step" data-delay="300">RCI Brasil Serviços e Participações LTDA</p>
+            <p class="slide-subtitle" data-animate="step" data-delay="450">2025</p>
+            <p class="slide-subtitle" data-animate="step" data-delay="600" style="margin-top: 2rem;">Escritório</p>
+            <p class="slide-subtitle" data-animate="step" data-delay="750">Zappa & Peluso Advogados Associados</p>
+        </div>
+    </section>
+
+    <!-- ENTRADAS E ENCERRADOS (LADO A LADO) -->
+    <section class="slide" id="entradas-encerrados">
+        <div class="slide-content slide-tres-tabelas">
+            <h2 class="slide-title" data-animate="step" data-delay="0">Entradas e Encerrados</h2>
+            <p class="slide-subtitle" data-animate="step" data-delay="80">Análise por Objeto da Ação</p>
+            <div class="tres-tabelas-view" data-animate="step" data-delay="150">
+                <div class="tabelas-topo">
+                    <div class="table-wrapper table-wrapper-scroll">
+                        <h3 class="table-title">Entradas</h3>
+                        <div class="table-container table-container-scroll">
+                            <table id="table-entradas">
+                                <thead>
+                                    <tr>
+                                        <th class="sortable" data-col="objeto">OBJETO DA AÇÃO</th>
+                                        <th class="sortable" data-col="2022">2022</th>
+                                        <th class="sortable" data-col="2023">2023</th>
+                                        <th class="sortable" data-col="2024">2024</th>
+                                        <th class="sortable" data-col="2025">2025</th>
+                                        <th class="sortable" data-col="total">Total</th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="table-wrapper table-wrapper-scroll">
+                        <h3 class="table-title">Encerrados</h3>
+                        <div id="encerrados-espelho-info" class="encerrados-espelho-info" style="display:none;">
+                            <span id="encerrados-espelho-texto"></span>
+                            <button type="button" id="btn-encerrados-ver-todos" class="btn-ver-todos">Ver todos</button>
+                        </div>
+                        <div class="table-container table-container-scroll">
+                            <table id="table-encerrados">
+                                <thead>
+                                    <tr>
+                                        <th>OBJETO DA AÇÃO</th>
+                                        <th>2023</th>
+                                        <th>2024</th>
+                                        <th>2025</th>
+                                        <th>Total</th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- SALDO: ENTRADAS VS. ENCERRAMENTOS -->
+    <section class="slide" id="saldo-entradas-encerramentos">
+        <div class="slide-content">
+            <h2 class="slide-title" data-animate="step" data-delay="0">Saldo: Entradas vs. Encerramentos</h2>
+            <p class="slide-subtitle" data-animate="step" data-delay="80">Análise por Objeto da Ação</p>
+            <div class="table-wrapper table-wrapper-scroll table-saldo-wrapper" data-animate="step" data-delay="150">
+                <div class="table-container table-container-scroll">
+                    <table id="table-saldo">
+                        <thead>
+                            <tr>
+                                <th class="sortable" data-col="objeto">OBJETO DA AÇÃO</th>
+                                <th class="sortable" data-col="entradas">Qtd. Entradas</th>
+                                <th class="sortable" data-col="encerramentos">Qtd. Encerramentos</th>
+                                <th class="sortable" data-col="saldo">Saldo</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ESTATÍSTICAS GERAIS -->
+    <section class="slide" id="estatisticas-gerais">
+        <div class="slide-content">
+            <h2 class="slide-title" data-animate="step" data-delay="0">Estatísticas Gerais</h2>
+            <div class="kpi-container" data-animate="step" data-delay="150">
+                <div class="kpi-item">
+                    <span class="kpi-label">Número Geral de Ações</span>
+                    <span class="kpi-value" id="kpi-total-acoes">-</span>
+                </div>
+                <div class="kpi-item">
+                    <span class="kpi-label">Número Geral de Encerramentos</span>
+                    <span class="kpi-value" id="kpi-total-encerramentos">-</span>
+                </div>
+                <div class="kpi-item">
+                    <span class="kpi-label">Média Global de Pagamento</span>
+                    <span class="kpi-value" id="kpi-media-pagamento">-</span>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- DASHBOARD DE AÇÕES GANHAS/PERDIDAS -->
+    <section class="slide" id="dashboard-acoes-ganhas-perdidas">
+        <div class="slide-content">
+            <h2 class="slide-title" data-animate="step" data-delay="0">Dashboard de Resultados</h2>
+            <p class="slide-subtitle" data-animate="step" data-delay="80">Ações Ganhas vs. Perdidas</p>
+            <div class="charts-grid" data-animate="step" data-delay="150">
+                <div class="chart-container">
+                    <canvas id="chart-acoes-ganhas-perdidas"></canvas>
+                </div>
+                <div class="chart-container">
+                    <canvas id="chart-acordo-antes-sentenca"></canvas>
+                </div>
+            </div>
+            <div class="kpi-container" data-animate="step" data-delay="200" style="margin-top: 2rem;">
+                <div class="kpi-item">
+                    <span class="kpi-label">Ações Ganhas</span>
+                    <span class="kpi-value" id="kpi-acoes-ganhas">-</span>
+                    <span class="kpi-subtitle" id="kpi-acoes-ganhas-pct">-</span>
+                </div>
+                <div class="kpi-item">
+                    <span class="kpi-label">Ações Perdidas</span>
+                    <span class="kpi-value" id="kpi-acoes-perdidas">-</span>
+                    <span class="kpi-subtitle" id="kpi-acoes-perdidas-pct">-</span>
+                </div>
+                <div class="kpi-item">
+                    <span class="kpi-label">Acordo Antes Sentença</span>
+                    <span class="kpi-value" id="kpi-acordo-antes">-</span>
+                    <span class="kpi-subtitle" id="kpi-economia-acordo">-</span>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- EVOLUÇÃO DA CARTEIRA -->
+    <section class="slide" id="evolucao">
+        <div class="slide-content">
+            <h2 class="slide-title" data-animate="step" data-delay="0">Evolução da Carteira: Entradas vs. Saídas</h2>
+            <div class="chart-container" data-animate="step" data-delay="150">
+                <canvas id="chart-evolucao"></canvas>
+            </div>
+        </div>
+    </section>
+
+    <!-- ANÁLISE DE IMPACTO: Cross-Filtering (Mapa + Objeto + Tempo + Base) -->
+    <section class="slide" id="slide-analise-impacto">
+        <div class="slide-content">
+            <h2 class="slide-title" data-animate="step" data-delay="0">Análise de Impacto e Correlação</h2>
+            <p class="slide-subtitle" data-animate="step" data-delay="80">Análise baseada em Estado (UF) - Clique em um Estado no mapa para filtrar</p>
+            <div class="slide-analise-impacto-grid" data-animate="step" data-delay="150">
+                <div class="card-impacto card-mapa" data-animate="step" data-delay="200">
+                    <h3 class="chart-subtitle">Mapa de Calor/Bolhas por UF</h3>
+                    <div class="map-container map-impacto">
+                        <div id="map-analise-impacto"></div>
+                    </div>
+                </div>
+                <div class="card-impacto card-rosca" data-animate="step" data-delay="250">
+                    <h3 class="chart-subtitle">Distribuição por UF (%)</h3>
+                    <div class="chart-container chart-impacto">
+                        <canvas id="chart-impacto-rosca"></canvas>
+                    </div>
+                </div>
+                <div class="card-impacto card-base" data-animate="step" data-delay="300">
+                    <h3 class="chart-subtitle">Quantidade de Casos e Média de Prejuízo (R$ Mil) por UF</h3>
+                    <div class="chart-container chart-impacto">
+                        <canvas id="chart-impacto-base"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+   
+
+    <!-- SLA POR ÁREA INTERNA E SOLICITAÇÕES -->
+    <section class="slide" id="sla-area">
+        <div class="slide-content">
+            <h2 class="slide-title" data-animate="step" data-delay="0">SLA de Atendimento por Área Interna</h2>
+            <div class="charts-grid" data-animate="step" data-delay="150">
+                <div class="chart-container">
+                    <canvas id="chart-sla-area"></canvas>
+                </div>
+                <div class="chart-container">
+                    <canvas id="chart-solicitacoes-prazo-area"></canvas>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    
+
+    <!-- VOLUME E CUSTO POR ENCERRAMENTO -->
+    <section class="slide" id="volume-custo">
+        <div class="slide-content">
+            <h2 class="slide-title" data-animate="step" data-delay="0">Volume (Qtd) e Custo Médio (R$) por Encerramento</h2>
+            <div class="chart-container" data-animate="step" data-delay="150">
+                <canvas id="chart-volume-custo"></canvas>
+            </div>
+        </div>
+    </section>
+
+    <!-- REITERAÇÕES POR OBJETO -->
+    <section class="slide" id="reiteracoes">
+        <div class="slide-content">
+            <h2 class="slide-title" data-animate="step" data-delay="0">Reiterações por Objeto</h2>
+            <div class="chart-container" data-animate="step" data-delay="150">
+                <canvas id="chart-reiteracoes"></canvas>
+            </div>
+        </div>
+    </section>
+
+    <!-- CURVA DE IMPACTO FINANCEIRO ACUMULADO (PARETO) -->
+    <section class="slide" id="pareto-impacto">
+        <div class="slide-content">
+            <h2 class="slide-title" data-animate="step" data-delay="0">Curva de Impacto Financeiro Acumulado (Pareto)</h2>
+            <div class="chart-container" data-animate="step" data-delay="150">
+                <canvas id="chart-pareto-impacto"></canvas>
+            </div>
+        </div>
+    </section>
+
+   
+    <!-- CASOS CRÍTICOS E SENTENÇAS -->
+    <section class="slide" id="casos-criticos-sentencas">
+        <div class="slide-content">
+            <h2 class="slide-title" data-animate="step" data-delay="0">Casos Críticos</h2>
+            <h3 class="slide-subtitle" data-animate="step" data-delay="150">Valor Pretendido - Casos de 2025 Individualizados</h3>
+            <div class="table-filters" data-animate="step" data-delay="200">
+                <div class="filter-group">
+                    <label for="filter-nome-criticos">Filtrar por Nome:</label>
+                    <input type="text" id="filter-nome-criticos" placeholder="Digite o nome do cliente..." class="filter-input">
+                </div>
+                <div class="filter-group">
+                    <label for="filter-tipo-criticos">Filtrar por Tipo:</label>
+                    <input type="text" id="filter-tipo-criticos" placeholder="Digite o tipo de ocorrência..." class="filter-input">
+                </div>
+                <div class="filter-group">
+                    <label for="filter-motivo-criticos">Filtrar por Motivo:</label>
+                    <input type="text" id="filter-motivo-criticos" placeholder="Digite o motivo..." class="filter-input">
+                </div>
+                <div class="filter-group">
+                    <label for="filter-situacao-criticos">Filtrar por Situação:</label>
+                    <input type="text" id="filter-situacao-criticos" placeholder="Digite a situação..." class="filter-input">
+                </div>
+                <div class="filter-group">
+                    <label for="filter-prejuizo-min-criticos">Prejuízo Mín (R$):</label>
+                    <input type="number" id="filter-prejuizo-min-criticos" placeholder="Min" class="filter-input filter-number" min="0" step="0.01">
+                </div>
+                <div class="filter-group">
+                    <label for="filter-prejuizo-max-criticos">Prejuízo Máx (R$):</label>
+                    <input type="number" id="filter-prejuizo-max-criticos" placeholder="Max" class="filter-input filter-number" min="0" step="0.01">
+                </div>
+                <button type="button" id="btn-limpar-filtros-criticos" class="btn-limpar-filtros">Limpar Filtros</button>
+            </div>
+            <div class="content-grid" data-animate="step" data-delay="300">
+                <div class="table-container table-wrapper-scroll" style="flex: 1.5;">
+                    <div class="table-container-scroll">
+                        <table id="table-casos-criticos">
+                            <thead>
+                                <tr>
+                                    <th>Nome Cliente</th>
+                                    <th>Tipo Ocorrência</th>
+                                    <th>Motivo Detalhado</th>
+                                    <th>Situação</th>
+                                    <th>Prejuízo</th>
+                                    <th>Valor Pretendido</th>
+                                    <th>Ano</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+                
+            </div>
+            
+        </div>
+    </section>
+
+    <!-- REINCIDÊNCIA -->
+    <section class="slide" id="reincidencia">
+        <div class="slide-content">
+            <h2 class="slide-title" data-animate="step" data-delay="0">Reincidência</h2>
+            <div class="kpi-container" data-animate="step" data-delay="150">
+                <div class="kpi-item">
+                    <span class="kpi-label">Taxa de Reincidência</span>
+                    <span class="kpi-value" id="taxa-reincidencia">-</span>
+                </div>
+            </div>
+            <div class="table-filters" data-animate="step" data-delay="250">
+                <div class="filter-group">
+                    <label for="filter-nome-reincidencia">Filtrar por Nome:</label>
+                    <input type="text" id="filter-nome-reincidencia" placeholder="Digite o nome do cliente..." class="filter-input">
+                </div>
+                <div class="filter-group">
+                    <label for="filter-qtd-min">Qtd. Mín:</label>
+                    <input type="number" id="filter-qtd-min" placeholder="Min" class="filter-input filter-number" min="0">
+                </div>
+                <div class="filter-group">
+                    <label for="filter-qtd-max">Qtd. Máx:</label>
+                    <input type="number" id="filter-qtd-max" placeholder="Max" class="filter-input filter-number" min="0">
+                </div>
+                <div class="filter-group">
+                    <label for="filter-resultado-min">Resultado Mín (R$):</label>
+                    <input type="number" id="filter-resultado-min" placeholder="Min" class="filter-input filter-number" min="0" step="0.01">
+                </div>
+                <div class="filter-group">
+                    <label for="filter-resultado-max">Resultado Máx (R$):</label>
+                    <input type="number" id="filter-resultado-max" placeholder="Max" class="filter-input filter-number" min="0" step="0.01">
+                </div>
+                <button type="button" id="btn-limpar-filtros-reincidencia" class="btn-limpar-filtros">Limpar Filtros</button>
+            </div>
+            <div class="table-wrapper table-wrapper-scroll" data-animate="step" data-delay="300">
+                <div class="table-container table-container-scroll">
+                    <table id="table-reincidencia">
+                        <thead>
+                            <tr>
+                                <th class="sortable" data-col="nome_cliente">Nome Cliente ⇅</th>
+                                <th class="sortable" data-col="qtd_processos">Qtd de Processos ⇅</th>
+                                <th class="sortable" data-col="resultado">Resultado ⇅</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- TIPOS DE AÇÕES 2025 E REINCIDÊNCIA -->
+    <section class="slide" id="tipos-acoes-reincidencia">
+        <div class="slide-content">
+            <h2 class="slide-title" data-animate="step" data-delay="0">Tipos de Ações com maior incidência - 2025</h2>
+            <h3 class="slide-subtitle" data-animate="step" data-delay="150">Reincidência</h3>
+            <div class="charts-grid" data-animate="step" data-delay="300">
+                <div class="chart-container">
+                    <canvas id="chart-tipos-acoes"></canvas>
+                </div>
+                <div class="content-grid">
+                    <div class="chart-container">
+                        <canvas id="chart-reincidencia"></canvas>
+                    </div>
+                    <div class="table-container">
+                        <table id="table-reincidencia">
+                            <thead>
+                                <tr>
+                                    <th>Nome Cliente</th>
+                                    <th>Qtd de Processos</th>
+                                    <th>Prejuízo</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ERRO SISTÊMICO E PREJUÍZO POR ERRO CRÍTICO -->
+    <section class="slide" id="erro-sistemico-prejuizo">
+        <div class="slide-content">
+            <h2 class="slide-title" data-animate="step" data-delay="0">Erro Sistêmico (R$) por Tipo</h2>
+            <h3 class="slide-subtitle" data-animate="step" data-delay="150">Erro Sistêmico (TI) - Valor Pretendido</h3>
+            <div class="charts-grid" data-animate="step" data-delay="300">
+                <div class="chart-container">
+                    <canvas id="chart-prejuizo-erro-critico"></canvas>
+                </div>
+                <div class="chart-container">
+                    <h3 class="chart-subtitle">Custo Erro Sistêmico</h3>
+                    <canvas id="chart-erro-sistemico"></canvas>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- AUTOS COM MAIOR REITERAÇÃO -->
+    <section class="slide" id="maior-reiteracao">
+        <div class="slide-content">
+            <h2 class="slide-title" data-animate="step" data-delay="0">Quantidade de Reiterações por Processo</h2>
+            <p class="slide-subtitle" data-animate="step" data-delay="150">(Maiores que 10 reiterações)</p>
+            <div class="table-container" data-animate="step" data-delay="300">
+                <table id="table-reiteracao">
+                    <thead>
+                        <tr>
+                            <th>Autos</th>
+                            <th>Objeto da Ação</th>
+                            <th>Qnd. de Reiterações</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="js/api.js"></script>
+    <script src="js/charts.js"></script>
+    <script src="js/maps.js"></script>
+    <script src="js/animations.js"></script>
+    <script src="js/scroll.js"></script>
+    <script src="js/sequence.js"></script>
+</body>
+</html>
