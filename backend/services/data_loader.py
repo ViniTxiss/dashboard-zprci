@@ -15,8 +15,9 @@ _DEBUG_LOG = Path(r"c:\Users\vini\Desktop\zappa + html v2\.cursor\debug.log")
 BENCHMARK_NACIONAL = 23
 
 # Colunas mínimas para DataFrame vazio quando a Base Unificada não existir
+# NOTA: status não está mais aqui pois é calculado dinamicamente de motivo_encerramento
 _COLUNAS_VAZIAS = [
-    'objeto_acao', 'data_entrada', 'data_encerramento', 'status', 'estado', 'impacto_financeiro'
+    'objeto_acao', 'data_entrada', 'data_encerramento', 'estado', 'impacto_financeiro', 'motivo_encerramento'
 ]
 
 
@@ -29,6 +30,22 @@ class DataLoader:
         # Prioridade: 1) Material Casos Críticos, 2) novos casos (mais recente)
         # Buscar arquivos por padrão para evitar problemas de encoding
         data_dir = backend_dir / "data"
+        
+        # Tentar baixar arquivos de storage externo (S3) se configurado
+        # Isso permite manter arquivos sensíveis fora do repositório Git
+        try:
+            from backend.services.storage_loader import download_data_files_from_storage
+            download_results = download_data_files_from_storage(data_dir)
+            if download_results.get('principal') or download_results.get('novos_casos'):
+                print("Arquivos baixados do storage externo com sucesso")
+            elif download_results.get('errors'):
+                print(f"Avisos ao baixar arquivos: {download_results['errors']}")
+        except ImportError:
+            # Storage loader não disponível (boto3 não instalado ou não configurado)
+            pass
+        except Exception as e:
+            print(f"Erro ao tentar baixar arquivos do storage externo: {e}")
+        
         self.xlsx_principal = None
         self.xlsx_novos_casos = None
         self.xlsx_secundario = None  # Mantido para compatibilidade
@@ -328,25 +345,60 @@ class DataLoader:
             
             return df_final
     
+    def _calculate_status_from_motivo(self, mapped_df: pd.DataFrame) -> pd.Series:
+        """
+        Calcula status dinamicamente baseado em motivo_encerramento (coluna U do Excel).
+        
+        Lógica jurídica:
+        - Se motivo_encerramento contém "ativo", "sem sentença", "fase recurso" → "Em Tramitação" (caso ativo)
+        - Caso contrário (outros valores) → "Encerrado"
+        - Se motivo_encerramento vazio/NaN → "Em Tramitação" (padrão - caso ainda não encerrado)
+        """
+        # Valores que indicam caso ATIVO (não encerrado) - coluna U
+        valores_ativos = [
+            'ativo', 'ativos', 'atividade', 'atividades',
+            'sem sentença', 'sem sentenca', 'sem sentenç', 'sem senten',
+            'fase de recurso', 'fase recurso', 'recurso', 'recursos',
+            'em recurso', 'em fase de recurso'
+        ]
+        
+        if 'motivo_encerramento' not in mapped_df.columns:
+            # Se não há motivo_encerramento, todos são "Em Tramitação" (casos ativos)
+            return pd.Series(['Em Tramitação'] * len(mapped_df), index=mapped_df.index)
+        
+        motivo = mapped_df['motivo_encerramento'].astype(str).str.lower().str.strip()
+        
+        # Verificar se é um valor ativo (caso ainda em tramitação)
+        is_ativo = motivo.str.contains('|'.join(valores_ativos), case=False, na=False, regex=True)
+        
+        # Verificar se tem motivo preenchido (não vazio, não NaN)
+        tem_motivo = motivo.notna() & (motivo != '') & (motivo != 'nan')
+        
+        # Status = "Encerrado" se tem motivo E não é ativo
+        # Status = "Em Tramitação" se é ativo OU não tem motivo (padrão)
+        status = pd.Series(['Em Tramitação'] * len(mapped_df), index=mapped_df.index)
+        status[tem_motivo & ~is_ativo] = 'Encerrado'
+        
+        return status
+    
     def _map_columns(self, df: pd.DataFrame) -> pd.DataFrame:
         """Mapeia colunas do CSV/Excel para o formato esperado pelo dashboard"""
         mapped_df = pd.DataFrame()
 
         # Mapeamento principal (nome_interno: coluna_origem)
         # Suporta tanto colunas antigas quanto novas dos arquivos atualizados
+        # NOTA: status e situacao foram removidos - status será calculado dinamicamente de motivo_encerramento
         column_mapping = {
             'data_entrada': ['DATA ENTRADA', 'Data de entrada', 'Data Entrada'],
             'data_encerramento': ['DATA ENCERRAMENTO', 'Data do Encerramento', 'Data Encerramento'],
             'objeto_acao': ['Descricao do Tipo de Ação', 'ACO.Descrição', 'OBJETO DA AÇÃO', 'Objeto da Ação'],
             'estado': ['Estado', 'UF'],
-            'status': ['Status', 'Situação'],
             'impacto_financeiro': ['Valor da Causa Atual', 'Valor da Causa', 'Valor Causa'],
             'nome_cliente': ['Pólo Ativo', 'REU.Nome', 'Nome Cliente', 'Cliente'],
             'numero_processo': ['Número do Processo', 'Número do processo', 'Número Processo', 
                                'Numero do Processo', 'Numero do processo', 'Numero Processo',
                                'Nº do Processo', 'Nº Processo', 'N. do Processo', 'N. Processo',
                                'Processo', 'Número Processo', 'Numero Processo'],
-            'situacao': ['Situação', 'Status'],
             'prognostico': ['Descrição do Prognóstico', 'Prognóstico'],
             'area_juridica': ['Área Jurídica', 'Area Jurídica'],
             'comarca': ['Descricao Da Comarca', 'Comarca'],
@@ -375,10 +427,6 @@ class DataLoader:
                         mapped_df[new_col] = mapped_df[new_col].fillna(df[old_col])
                     break  # Usar primeira coluna encontrada
 
-        # Status: preencher com Situação quando Status estiver vazio
-        if 'status' in mapped_df.columns and 'situacao' in mapped_df.columns:
-            mapped_df['status'] = mapped_df['status'].fillna(mapped_df['situacao'])
-
         # Objeto da ação: fallback se ausente ou só nulos (robusto a encoding/variantes no Excel)
         if 'objeto_acao' not in mapped_df.columns or mapped_df['objeto_acao'].isna().all():
             for c in df.columns:
@@ -394,7 +442,7 @@ class DataLoader:
         # Garantir colunas essenciais quando mapeamento não encontrou
         if len(mapped_df) == 0:
             mapped_df = df.copy()
-            for k, v in [('objeto_acao', 'Descricao do Tipo de Ação'), ('objeto_acao', 'OBJETO DA AÇÃO'), ('estado', 'Estado'), ('data_entrada', 'Data de Entrada'), ('data_entrada', 'DATA ENTRADA'), ('impacto_financeiro', 'Valor da Causa Atual'), ('status', 'Status')]:
+            for k, v in [('objeto_acao', 'Descricao do Tipo de Ação'), ('objeto_acao', 'OBJETO DA AÇÃO'), ('estado', 'Estado'), ('data_entrada', 'Data de Entrada'), ('data_entrada', 'DATA ENTRADA'), ('impacto_financeiro', 'Valor da Causa Atual')]:
                 if v in df.columns and k not in mapped_df.columns:
                     mapped_df[k] = df[v]
         
@@ -417,23 +465,9 @@ class DataLoader:
         if 'data_encerramento' in mapped_df.columns:
             mapped_df['data_encerramento'] = pd.to_datetime(mapped_df['data_encerramento'], errors='coerce')
 
-        # Normalizar status (inclui ENTRADA -> Em Tramitação)
-        if 'status' in mapped_df.columns:
-            mapped_df['status'] = mapped_df['status'].astype(str).map({
-                'EM ANDAMENTO': 'Em Tramitação',
-                'ENCERRADO': 'Encerrado',
-                'ENTRADA': 'Em Tramitação',
-                'Em andamento': 'Em Tramitação',
-                'Encerrado': 'Encerrado',
-                'Em Tramitação': 'Em Tramitação'
-            }).fillna('Em Tramitação')
-        elif 'situacao' in mapped_df.columns:
-            mapped_df['status'] = mapped_df['situacao'].astype(str).map({
-                'Em andamento': 'Em Tramitação',
-                'Encerrado': 'Encerrado'
-            }).fillna('Em Tramitação')
-        else:
-            mapped_df['status'] = 'Em Tramitação'
+        # Calcular status dinamicamente baseado em motivo_encerramento (coluna U)
+        # Status não é mais mapeado de colunas fixas - é calculado da lógica jurídica
+        mapped_df['status'] = self._calculate_status_from_motivo(mapped_df)
 
         if 'objeto_acao' in mapped_df.columns:
             mapped_df['objeto_acao'] = mapped_df['objeto_acao'].fillna('Não Informado')

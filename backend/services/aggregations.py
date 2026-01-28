@@ -65,7 +65,7 @@ def _is_encerrado(df: pd.DataFrame, index=None) -> pd.Series:
     - Valores que NÃO são encerramentos: "Ativo", "Sem sentença", "Fase recurso" (e variações)
     - Portanto, encerrado = qualquer valor na coluna U EXCETO esses três
     
-    Fallback: se não houver motivo_encerramento, usar status == 'Encerrado'
+    Fallback: se não houver motivo_encerramento, considerar como NÃO encerrado (caso ativo)
     """
     # Valores que NÃO são encerramentos (coluna U)
     nao_encerrados_valores = [
@@ -87,8 +87,9 @@ def _is_encerrado(df: pd.DataFrame, index=None) -> pd.Series:
                 ~motivo.str.contains('|'.join(nao_encerrados_valores), case=False, na=False, regex=True)
             )
         else:
-            # Fallback: usar status
-            mask = (df.loc[index, 'status'] == 'Encerrado')
+            # Fallback: se não há motivo_encerramento, considerar como NÃO encerrado (caso ativo)
+            # Retornar False (não encerrado) para todos os índices
+            mask = pd.Series([False] * len(df.index), index=df.index)
     else:
         # Verificar se tem motivo_encerramento
         if 'motivo_encerramento' in df.columns:
@@ -101,8 +102,9 @@ def _is_encerrado(df: pd.DataFrame, index=None) -> pd.Series:
                 ~motivo.str.contains('|'.join(nao_encerrados_valores), case=False, na=False, regex=True)
             )
         else:
-            # Fallback: usar status
-            mask = (df['status'] == 'Encerrado')
+            # Fallback: se não há motivo_encerramento, considerar como NÃO encerrado (caso ativo)
+            # Retornar False (não encerrado) para todos os registros
+            mask = pd.Series([False] * len(df), index=df.index)
     
     return mask
 

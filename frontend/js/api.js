@@ -16,6 +16,22 @@ const API_BASE_URL = (() => {
     return 'http://localhost:8001/api';
 })();
 
+// Obter API Key para autenticação
+const API_KEY = (() => {
+    // 1. Verificar se está definido globalmente (via script no HTML)
+    if (window.API_KEY) {
+        return window.API_KEY;
+    }
+    // 2. Verificar variável de ambiente (Vercel)
+    if (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_API_KEY) {
+        return process.env.NEXT_PUBLIC_API_KEY;
+    }
+    // 3. Fallback: tentar obter de variável de ambiente do Vercel
+    // No Vercel, variáveis de ambiente são injetadas no build
+    // Para produção, configure NEXT_PUBLIC_API_KEY no Vercel
+    return null; // Sem API Key em desenvolvimento local
+})();
+
 // Estado global para filtro de estado
 let estadoSelecionado = null;
 
@@ -29,11 +45,19 @@ class APIClient {
             
             console.log(`APIClient.get: Buscando ${fullUrl}`);
             
+            // Preparar headers
+            const headers = {
+                'Content-Type': 'application/json',
+            };
+            
+            // Adicionar API Key se disponível
+            if (API_KEY) {
+                headers['X-API-Key'] = API_KEY;
+            }
+            
             const response = await fetch(fullUrl, {
                 method: 'GET',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: headers,
             });
             
             // Verificar status HTTP

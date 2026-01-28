@@ -10,18 +10,27 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <script>
-      // Configurar URL da API baseada no ambiente
+      // Configurar URL da API e API Key baseadas no ambiente
       (function() {
         const isLocalhost = window.location.hostname === 'localhost' || 
                             window.location.hostname === '127.0.0.1';
         
         if (isLocalhost) {
           window.API_BASE_URL = 'http://localhost:8001/api';
+          // Em desenvolvimento local, API Key não é necessária se não estiver configurada no backend
+          window.API_KEY = null;
         } else {
           // Em produção, usar a URL do Render
           // Esta URL será substituída pela variável de ambiente do Vercel ou configurada manualmente
           window.API_BASE_URL = window.API_BASE_URL || 
                                 'https://seu-backend.onrender.com/api';
+          
+          // API Key será injetada pelo Vercel via variável de ambiente
+          // Configure NEXT_PUBLIC_API_KEY no Vercel Dashboard
+          // Fallback: tentar obter de meta tag ou variável global
+          window.API_KEY = window.API_KEY || 
+                          (document.querySelector('meta[name="api-key"]')?.content) ||
+                          null;
         }
       })();
     </script>

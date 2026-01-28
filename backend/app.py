@@ -19,11 +19,13 @@ try:
     from routes import (
         entradas, encerramentos, saldo, mapas, indicadores
     )
+    from middleware.auth import APIKeyMiddleware
 except ImportError:
     # Se falhar, tentar import relativo (produção/deploy)
     from backend.routes import (
         entradas, encerramentos, saldo, mapas, indicadores
     )
+    from backend.middleware.auth import APIKeyMiddleware
 
 # Debug log (apenas em desenvolvimento)
 _DEBUG_LOG = None
@@ -48,6 +50,23 @@ async def lifespan(app: FastAPI):
                 f.write(json.dumps({"timestamp":int(time.time()*1000),"location":"app.startup","message":"backend_started","data":{"port_note":"bind_ok_if_this_log_exists"},"sessionId":"debug-session","hypothesisId":"H4"}) + "\n")
         except Exception: pass
     # #endregion
+    
+    # Tentar baixar arquivos de dados de storage externo (S3) se configurado
+    # Isso permite manter arquivos Excel sensíveis fora do repositório Git
+    try:
+        from backend.services.storage_loader import download_data_files_from_storage
+        backend_dir = Path(__file__).parent
+        data_dir = backend_dir / "data"
+        download_results = download_data_files_from_storage(data_dir)
+        if download_results.get('principal') or download_results.get('novos_casos'):
+            print("✓ Arquivos de dados baixados do storage externo")
+        elif download_results.get('errors'):
+            print(f"⚠ Avisos ao baixar arquivos: {download_results['errors']}")
+    except ImportError:
+        # boto3 não instalado ou storage não configurado - usar arquivos locais
+        pass
+    except Exception as e:
+        print(f"⚠ Erro ao baixar arquivos do storage externo (usando arquivos locais): {e}")
 
     # Shutdown (se necessário adicionar código aqui)
     yield
@@ -74,13 +93,18 @@ else:
     if os.getenv("ENVIRONMENT", "development") == "development":
         allow_origins.extend(["http://localhost:8080", "http://127.0.0.1:8080", "http://localhost:5500"])
 
+# Middleware de CORS (deve vir antes do middleware de autenticação)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allow_origins,
     allow_credentials=True,
     allow_methods=["*"],
-    allow_headers=["*"],
+    allow_headers=["*"],  # Permite X-API-Key header
 )
+
+# Middleware de Autenticação (API Key)
+# Apenas ativa se API_KEY estiver configurada nas variáveis de ambiente
+app.add_middleware(APIKeyMiddleware)
 
 # Registrar rotas
 app.include_router(entradas.router, prefix="/api/entradas", tags=["Entradas"])

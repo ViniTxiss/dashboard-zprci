@@ -85,8 +85,8 @@ def calculate_evolution(df: pd.DataFrame, date_col: str = 'data_entrada') -> Lis
             ~motivo.str.contains('|'.join(nao_encerrados_valores), case=False, na=False, regex=True)
         )
     else:
-        # Fallback: usar status
-        encerrados_mask = (df_copy['status'] == 'Encerrado')
+        # Fallback: se não há motivo_encerramento, considerar como NÃO encerrado (caso ativo)
+        encerrados_mask = pd.Series([False] * len(df_copy), index=df_copy.index)
     encerrados_df = df_copy[encerrados_mask].copy()
     
     # Processar Encerramentos
