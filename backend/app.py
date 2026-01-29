@@ -15,17 +15,17 @@ from fastapi.responses import JSONResponse
 
 # Imports relativos para funcionar quando executado da raiz
 try:
-    # Tentar import absoluto primeiro (desenvolvimento local)
-    from routes import (
-        entradas, encerramentos, saldo, mapas, indicadores
-    )
-    from middleware.auth import APIKeyMiddleware
-except ImportError:
-    # Se falhar, tentar import relativo (produção/deploy)
+    # Tentar import com backend. primeiro (produção/deploy - Render/Vercel)
     from backend.routes import (
         entradas, encerramentos, saldo, mapas, indicadores
     )
     from backend.middleware.auth import APIKeyMiddleware
+except ImportError:
+    # Se falhar, tentar import relativo (desenvolvimento local)
+    from routes import (
+        entradas, encerramentos, saldo, mapas, indicadores
+    )
+    from middleware.auth import APIKeyMiddleware
 
 # Debug log (apenas em desenvolvimento)
 _DEBUG_LOG = None
