@@ -121,7 +121,7 @@ async def root():
 
 @app.get("/health")
 async def health():
-    return {"status": "ok"}
+    return {"message": "Dashboard API - Backend funcionando"}
 
 
 # Via CLI: python -m uvicorn app:app --host 127.0.0.1 --port 8001

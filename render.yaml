@@ -10,5 +10,5 @@ services:
       - key: ENVIRONMENT
         value: production
       - key: ALLOWED_ORIGINS
-        value: https://seu-projeto.vercel.app
+        value: https://dashboard-rci.vercel.app,https://dashboard-rci.vercel.app/*
     healthCheckPath: /health

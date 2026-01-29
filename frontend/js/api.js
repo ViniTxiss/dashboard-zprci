@@ -8,11 +8,17 @@ const API_BASE_URL = (() => {
     if (window.API_BASE_URL) {
         return window.API_BASE_URL;
     }
-    // 2. Verificar variável de ambiente (Vercel)
+    // 2. Detectar se está rodando na Vercel (produção)
+    const hostname = window.location.hostname;
+    if (hostname.includes('vercel.app') || hostname.includes('vercel.com')) {
+        // Na Vercel, usar backend do Render
+        return 'https://dashboard-zprci-1.onrender.com/api';
+    }
+    // 3. Verificar variável de ambiente (se disponível)
     if (typeof process !== 'undefined' && process.env?.REACT_APP_API_URL) {
         return process.env.REACT_APP_API_URL;
     }
-    // 3. Fallback para desenvolvimento local
+    // 4. Fallback para desenvolvimento local
     return 'http://localhost:8001/api';
 })();
 
