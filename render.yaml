@@ -4,7 +4,7 @@ services:
     runtime: python
     plan: free
     buildCommand: python3.11 -m pip install --upgrade pip && python3.11 -m pip install -r requirements.txt
-    startCommand: export PYTHONPATH="${PYTHONPATH}:." && python3.11 -m gunicorn backend.app:app -w 4 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT --pythonpath .
+    startCommand: chmod +x start_render.sh && ./start_render.sh
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.0
