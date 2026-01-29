@@ -4,19 +4,34 @@ Rotas para todos os indicadores do dashboard
 
 from fastapi import APIRouter, HTTPException, Query
 from typing import Optional
-from services.data_loader import get_loader
-from services.aggregations import (
-    get_evolution, get_object_by_state, get_average_time,
-    get_cases_by_impact, get_sla_by_area, get_requests_by_deadline,
-    get_volume_cost, get_reiterations_by_object, get_pareto_impact,
-    get_critical_cases, get_sentences, get_reincidence,
-    get_action_types_2025, get_systemic_errors, get_top_reiterations,
-    get_final_kpis, get_analise_correlacao, get_casos_objetos_por_uf,
-    get_prejuizo_por_uf, get_sla_subsidio_por_area, get_areas_responsaveis,
-    get_solicitacoes_prazo_por_area, get_sentences_by_area, get_reincidencia_por_cliente,
-    get_estatisticas_gerais, get_dashboard_acoes_ganhas_perdidas, get_sentences_by_object,
-    get_totais_por_coluna
-)
+try:
+    from services.data_loader import get_loader
+    from services.aggregations import (
+        get_evolution, get_object_by_state, get_average_time,
+        get_cases_by_impact, get_sla_by_area, get_requests_by_deadline,
+        get_volume_cost, get_reiterations_by_object, get_pareto_impact,
+        get_critical_cases, get_sentences, get_reincidence,
+        get_action_types_2025, get_systemic_errors, get_top_reiterations,
+        get_final_kpis, get_analise_correlacao, get_casos_objetos_por_uf,
+        get_prejuizo_por_uf, get_sla_subsidio_por_area, get_areas_responsaveis,
+        get_solicitacoes_prazo_por_area, get_sentences_by_area, get_reincidencia_por_cliente,
+        get_estatisticas_gerais, get_dashboard_acoes_ganhas_perdidas, get_sentences_by_object,
+        get_totais_por_coluna
+    )
+except ImportError:
+    from backend.services.data_loader import get_loader
+    from backend.services.aggregations import (
+        get_evolution, get_object_by_state, get_average_time,
+        get_cases_by_impact, get_sla_by_area, get_requests_by_deadline,
+        get_volume_cost, get_reiterations_by_object, get_pareto_impact,
+        get_critical_cases, get_sentences, get_reincidence,
+        get_action_types_2025, get_systemic_errors, get_top_reiterations,
+        get_final_kpis, get_analise_correlacao, get_casos_objetos_por_uf,
+        get_prejuizo_por_uf, get_sla_subsidio_por_area, get_areas_responsaveis,
+        get_solicitacoes_prazo_por_area, get_sentences_by_area, get_reincidencia_por_cliente,
+        get_estatisticas_gerais, get_dashboard_acoes_ganhas_perdidas, get_sentences_by_object,
+        get_totais_por_coluna
+    )
 
 router = APIRouter()
 

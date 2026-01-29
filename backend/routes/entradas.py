@@ -8,8 +8,12 @@ from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Query
 from typing import Optional
-from services.data_loader import get_loader
-from services.aggregations import get_entradas_by_object
+try:
+    from services.data_loader import get_loader
+    from services.aggregations import get_entradas_by_object
+except ImportError:
+    from backend.services.data_loader import get_loader
+    from backend.services.aggregations import get_entradas_by_object
 
 router = APIRouter()
 _DEBUG_LOG = Path(r"c:\Users\vini\Desktop\zappa + html v2\.cursor\debug.log")

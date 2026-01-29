@@ -3,8 +3,12 @@ Rotas para dados de Saldo
 """
 
 from fastapi import APIRouter, HTTPException
-from services.data_loader import get_loader
-from services.aggregations import get_saldo, get_resumo_saldo
+try:
+    from services.data_loader import get_loader
+    from services.aggregations import get_saldo, get_resumo_saldo
+except ImportError:
+    from backend.services.data_loader import get_loader
+    from backend.services.aggregations import get_saldo, get_resumo_saldo
 
 router = APIRouter()
 

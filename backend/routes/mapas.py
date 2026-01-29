@@ -6,8 +6,12 @@ import json
 from pathlib import Path
 from fastapi import APIRouter, HTTPException, Query
 from typing import Optional
-from services.data_loader import get_loader
-from services.aggregations import get_map_data, apply_global_filters
+try:
+    from services.data_loader import get_loader
+    from services.aggregations import get_map_data, apply_global_filters
+except ImportError:
+    from backend.services.data_loader import get_loader
+    from backend.services.aggregations import get_map_data, apply_global_filters
 
 router = APIRouter()
 

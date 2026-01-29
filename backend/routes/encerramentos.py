@@ -4,8 +4,12 @@ Rotas para dados de Encerramentos
 
 from fastapi import APIRouter, HTTPException, Query
 from typing import Optional
-from services.data_loader import get_loader
-from services.aggregations import get_encerrados_by_object
+try:
+    from services.data_loader import get_loader
+    from services.aggregations import get_encerrados_by_object
+except ImportError:
+    from backend.services.data_loader import get_loader
+    from backend.services.aggregations import get_encerrados_by_object
 
 router = APIRouter()
 
