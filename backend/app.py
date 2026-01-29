@@ -126,17 +126,27 @@ async def health():
 
 # Via CLI: python -m uvicorn app:app --host 127.0.0.1 --port 8001
 # (api.js usa 8001; se 10048, libere a porta ou use --port 8002 e altere API_BASE_URL no frontend)
+# Em produção (Render/Vercel), use Gunicorn. Não execute uvicorn diretamente.
 if __name__ == "__main__":
-    import uvicorn
-    port = 8001
-    while port <= 8010:
-        try:
-            uvicorn.run(app, host="0.0.0.0", port=port)
-            break
-        except OSError as e:
-            err = getattr(e, "errno", None) or getattr(e, "winerror", None)
-            if err == 10048 and port < 8010:
-                print(f"Porta {port} em uso. Tentando {port + 1}... Atualize API_BASE_URL em frontend/js/api.js para http://localhost:{port + 1}/api se for usar outra porta.")
-                port += 1
-                continue
-            raise
+    # Apenas executar uvicorn em desenvolvimento local
+    # Em produção, o Render/Vercel deve usar Gunicorn
+    if os.getenv("ENVIRONMENT", "development") == "development":
+        import uvicorn
+        port = 8001
+        while port <= 8010:
+            try:
+                uvicorn.run(app, host="0.0.0.0", port=port)
+                break
+            except OSError as e:
+                err = getattr(e, "errno", None) or getattr(e, "winerror", None)
+                if err == 10048 and port < 8010:
+                    print(f"Porta {port} em uso. Tentando {port + 1}... Atualize API_BASE_URL em frontend/js/api.js para http://localhost:{port + 1}/api se for usar outra porta.")
+                    port += 1
+                    continue
+                raise
+    else:
+        # Em produção, não executar uvicorn diretamente
+        print("⚠️  Este script não deve ser executado diretamente em produção.")
+        print("   Use Gunicorn: gunicorn backend.app:app -w 4 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT --pythonpath .")
+        import sys
+        sys.exit(1)
