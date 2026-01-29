@@ -530,9 +530,17 @@ class DataLoader:
         if 'sentenca_orig' in df.columns:
             s = df['sentenca_orig'].astype(str).str.strip()
             df['sentenca'] = s.map({
+                # Sentenças definitivas
                 'Favorável': 'Favorável', 'Favoravel': 'Favorável',
                 'Desfavorável': 'Desfavorável', 'Desfavoravel': 'Desfavorável',
-                'Parcial': 'Parcial', 'Sem Sentença': 'Parcial', 'Sem Sentenç': 'Parcial'
+                'Parcial': 'Parcial', 'Sem Sentença': 'Parcial', 'Sem Sentenç': 'Parcial',
+                # Valores do Excel que devem ser mapeados
+                'Procon': 'Parcial', 'procon': 'Parcial',  # Procon tratado como parcial
+                'Em andamento': 'Parcial', 'Em Andamento': 'Parcial',
+                'Acordo - erro interno': 'Parcial', 'Acordo - Erro Interno': 'Parcial',
+                'Ag. Julgamento': 'Parcial', 'Ag. julgamento': 'Parcial',
+                'Pendente julgamento': 'Parcial', 'Pendente Julgamento': 'Pendente',
+                'Pendente': 'Pendente'
             }).fillna('Parcial')
         elif 'prognostico' in df.columns:
             df['sentenca'] = df['prognostico'].map({

@@ -387,7 +387,7 @@ def calculate_sla_by_area(df: pd.DataFrame) -> List[Dict]:
 
 
 def calculate_sentences(df: pd.DataFrame) -> Dict[str, Any]:
-    """Calcula distribuição de sentenças"""
+    """Calcula distribuição de sentenças incluindo todos os tipos"""
     sentences = df[df['sentenca'].notna()].copy()
     
     if sentences.empty:
@@ -395,7 +395,9 @@ def calculate_sentences(df: pd.DataFrame) -> Dict[str, Any]:
             'favoravel': 0,
             'desfavoravel': 0,
             'parcial': 0,
+            'pendente': 0,
             'total': 0,
+            'detalhado': {},
             'percentuais': {}
         }
     
@@ -403,15 +405,24 @@ def calculate_sentences(df: pd.DataFrame) -> Dict[str, Any]:
     
     total = sentences.shape[0]
     
+    # Contar por categoria principal
+    favoravel = counts.get('Favorável', 0)
+    desfavoravel = counts.get('Desfavorável', 0)
+    parcial = counts.get('Parcial', 0)
+    pendente = counts.get('Pendente', 0)
+    
     return {
-        'favoravel': counts.get('Favorável', 0),
-        'desfavoravel': counts.get('Desfavorável', 0),
-        'parcial': counts.get('Parcial', 0),
-        'total': total,
+        'favoravel': int(favoravel),
+        'desfavoravel': int(desfavoravel),
+        'parcial': int(parcial),
+        'pendente': int(pendente),
+        'total': int(total),
+        'detalhado': {k: int(v) for k, v in counts.items()},  # Todos os valores detalhados
         'percentuais': {
-            'favoravel': calculate_percentage(counts.get('Favorável', 0), total),
-            'desfavoravel': calculate_percentage(counts.get('Desfavorável', 0), total),
-            'parcial': calculate_percentage(counts.get('Parcial', 0), total)
+            'favoravel': calculate_percentage(favoravel, total),
+            'desfavoravel': calculate_percentage(desfavoravel, total),
+            'parcial': calculate_percentage(parcial, total),
+            'pendente': calculate_percentage(pendente, total)
         }
     }
 

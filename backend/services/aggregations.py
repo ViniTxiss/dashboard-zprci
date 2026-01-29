@@ -816,6 +816,71 @@ def get_sentences(df: pd.DataFrame) -> Dict[str, Any]:
     return calculate_sentences(df)
 
 
+def get_sentences_by_object(df: pd.DataFrame) -> Dict[str, Any]:
+    """
+    Sentenças agrupadas por objeto_acao.
+    Retorna quantidade de cada tipo de sentença por objeto.
+    """
+    try:
+        if 'objeto_acao' not in df.columns or 'sentenca' not in df.columns:
+            return {
+                'dados': [],
+                'totais_gerais': {},
+                'total_registros': 0
+            }
+        
+        # Filtrar registros com objeto_acao e sentenca válidos
+        df_copy = df[df['objeto_acao'].notna()].copy()
+        df_copy = df_copy[df_copy['objeto_acao'] != ''].copy()
+        df_copy = df_copy[df_copy['sentenca'].notna()].copy()
+        
+        if df_copy.empty:
+            return {
+                'dados': [],
+                'totais_gerais': {},
+                'total_registros': 0
+            }
+        
+        # Agrupar por objeto_acao e sentenca
+        grouped = df_copy.groupby(['objeto_acao', 'sentenca']).size().reset_index(name='quantidade')
+        
+        # Criar pivot table: objeto_acao x sentenca
+        pivot = grouped.pivot_table(
+            index='objeto_acao',
+            columns='sentenca',
+            values='quantidade',
+            fill_value=0
+        ).reset_index()
+        
+        # Converter para dicionário de registros
+        dados = []
+        for _, row in pivot.iterrows():
+            registro = {'objeto_acao': str(row['objeto_acao'])}
+            for col in pivot.columns:
+                if col != 'objeto_acao':
+                    registro[col] = int(row[col])
+            dados.append(registro)
+        
+        # Calcular totais gerais por tipo de sentença
+        totais_gerais = df_copy['sentenca'].value_counts().to_dict()
+        totais_gerais = {k: int(v) for k, v in totais_gerais.items()}
+        
+        return {
+            'dados': _sanitize_for_json(dados),
+            'totais_gerais': totais_gerais,
+            'total_registros': int(len(df_copy))
+        }
+    except Exception as e:
+        import traceback
+        print(f"get_sentences_by_object: ERRO: {e}")
+        traceback.print_exc()
+        return {
+            'dados': [],
+            'totais_gerais': {},
+            'total_registros': 0
+        }
+
+
 def get_sentences_by_area(df: pd.DataFrame) -> Dict[str, Any]:
     """Sentença Favorável/Desfavorável por Área Responsável"""
     try:
@@ -1557,3 +1622,88 @@ def get_analise_correlacao(df: pd.DataFrame, filtro_objeto: Optional[str] = None
         'distribuicao_uf': distribuicao_uf,
         'filtro_objeto': filtro_objeto
     }
+
+
+def get_totais_por_coluna(df: pd.DataFrame, coluna: str, agrupar_por: Optional[str] = None) -> Dict[str, Any]:
+    """
+    API genérica para retornar totais agregados por coluna.
+    
+    Args:
+        df: DataFrame com os dados
+        coluna: Nome da coluna para agregar (ex: 'sentenca', 'objeto_acao')
+        agrupar_por: Nome da coluna para agrupar (ex: 'objeto_acao', 'estado'). Se None, retorna totais gerais.
+    
+    Returns:
+        Dict com dados agregados e totais
+    """
+    try:
+        if coluna not in df.columns:
+            return {
+                'coluna': coluna,
+                'agrupar_por': agrupar_por,
+                'dados': [],
+                'total_geral': 0,
+                'erro': f'Coluna "{coluna}" não encontrada'
+            }
+        
+        df_copy = df[df[coluna].notna()].copy()
+        df_copy = df_copy[df_copy[coluna] != ''].copy()
+        
+        if df_copy.empty:
+            return {
+                'coluna': coluna,
+                'agrupar_por': agrupar_por,
+                'dados': [],
+                'total_geral': 0
+            }
+        
+        if agrupar_por:
+            # Agrupar por ambas as colunas
+            if agrupar_por not in df_copy.columns:
+                return {
+                    'coluna': coluna,
+                    'agrupar_por': agrupar_por,
+                    'dados': [],
+                    'total_geral': 0,
+                    'erro': f'Coluna "{agrupar_por}" não encontrada'
+                }
+            
+            # Criar pivot table: agrupar_por x coluna
+            grouped = df_copy.groupby([agrupar_por, coluna]).size().reset_index(name='quantidade')
+            pivot = grouped.pivot_table(
+                index=agrupar_por,
+                columns=coluna,
+                values='quantidade',
+                fill_value=0
+            ).reset_index()
+            
+            # Converter para dicionário de registros
+            dados = []
+            for _, row in pivot.iterrows():
+                registro = {agrupar_por: str(row[agrupar_por])}
+                for col in pivot.columns:
+                    if col != agrupar_por:
+                        registro[col] = int(row[col])
+                dados.append(registro)
+        else:
+            # Apenas totais gerais por valor da coluna
+            counts = df_copy[coluna].value_counts().to_dict()
+            dados = [{coluna: str(k), 'quantidade': int(v)} for k, v in counts.items()]
+        
+        return {
+            'coluna': coluna,
+            'agrupar_por': agrupar_por,
+            'dados': _sanitize_for_json(dados),
+            'total_geral': int(len(df_copy))
+        }
+    except Exception as e:
+        import traceback
+        print(f"get_totais_por_coluna: ERRO: {e}")
+        traceback.print_exc()
+        return {
+            'coluna': coluna,
+            'agrupar_por': agrupar_por,
+            'dados': [],
+            'total_geral': 0,
+            'erro': str(e)
+        }

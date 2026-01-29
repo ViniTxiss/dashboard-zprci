@@ -14,7 +14,8 @@ from services.aggregations import (
     get_final_kpis, get_analise_correlacao, get_casos_objetos_por_uf,
     get_prejuizo_por_uf, get_sla_subsidio_por_area, get_areas_responsaveis,
     get_solicitacoes_prazo_por_area, get_sentences_by_area, get_reincidencia_por_cliente,
-    get_estatisticas_gerais, get_dashboard_acoes_ganhas_perdidas
+    get_estatisticas_gerais, get_dashboard_acoes_ganhas_perdidas, get_sentences_by_object,
+    get_totais_por_coluna
 )
 
 router = APIRouter()
@@ -203,6 +204,26 @@ async def sentencas_por_area(
         import traceback
         error_detail = f"{str(e)}\n{traceback.format_exc()}"
         print(f"ERRO em sentencas_por_area: {error_detail}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/sentencas-por-objeto")
+async def sentencas_por_objeto(
+    estado: Optional[str] = Query(None, description="Filtrar por estado (ex: PA, SP)")
+):
+    """
+    Sentenças agrupadas por objeto_acao.
+    Retorna quantidade de cada tipo de sentença (Favorável, Desfavorável, Parcial, etc.) por objeto.
+    """
+    try:
+        loader = get_loader()
+        df = loader.get_dataframe()
+        df = _filter_by_state(df, estado)
+        return get_sentences_by_object(df)
+    except Exception as e:
+        import traceback
+        error_detail = f"{str(e)}\n{traceback.format_exc()}"
+        print(f"ERRO em sentencas_por_objeto: {error_detail}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -416,6 +437,28 @@ async def estatisticas_gerais(estado: Optional[str] = Query(None, description="F
         import traceback
         error_detail = f"{str(e)}\n{traceback.format_exc()}"
         print(f"ERRO em estatisticas_gerais: {error_detail}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/totais-por-coluna")
+async def totais_por_coluna(
+    coluna: str = Query(..., description="Nome da coluna para agregar (ex: 'sentenca', 'objeto_acao')"),
+    agrupar_por: Optional[str] = Query(None, description="Nome da coluna para agrupar (ex: 'objeto_acao', 'estado')"),
+    estado: Optional[str] = Query(None, description="Filtrar por estado (ex: PA, SP)")
+):
+    """
+    API genérica para retornar totais agregados por coluna.
+    Permite agregar qualquer coluna e opcionalmente agrupar por outra coluna.
+    """
+    try:
+        loader = get_loader()
+        df = loader.get_dataframe()
+        df = _filter_by_state(df, estado)
+        return get_totais_por_coluna(df, coluna, agrupar_por)
+    except Exception as e:
+        import traceback
+        error_detail = f"{str(e)}\n{traceback.format_exc()}"
+        print(f"ERRO em totais_por_coluna: {error_detail}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

@@ -153,10 +153,20 @@ def gerar_base_limpa():
     
     # Mapear colunas da Base Geral
     dados_base = []
+    linhas_puladas = 0
     for idx, row in df_base.iterrows():
-        # Pular linhas vazias ou cabeçalhos
-        if pd.isna(row.get('AUT.Nome')) or str(row.get('AUT.Nome')).strip() == '':
-            continue
+        # Pular linhas vazias ou cabeçalhos (mas apenas se AUT.Nome estiver realmente vazio)
+        nome_cliente_raw = row.get('AUT.Nome')
+        if pd.isna(nome_cliente_raw) or (isinstance(nome_cliente_raw, str) and nome_cliente_raw.strip() == ''):
+            # Verificar se há outros dados na linha que indiquem que é um registro válido
+            tem_outros_dados = (
+                pd.notna(row.get('OBJETO DA AÇÃO')) or 
+                pd.notna(row.get('DATA ENTRADA')) or 
+                pd.notna(row.get('VALOR DA CAUSA'))
+            )
+            if not tem_outros_dados:
+                linhas_puladas += 1
+                continue
         
         # Extrair dados conforme dicionário
         nome_cliente = str(row.get('AUT.Nome', '')).strip() if pd.notna(row.get('AUT.Nome')) else 'Não Informado'
@@ -221,6 +231,8 @@ def gerar_base_limpa():
         })
     
     print(f"Registros processados da base geral: {len(dados_base)}")
+    print(f"Linhas puladas (vazias/cabeçalhos): {linhas_puladas}")
+    print(f"Taxa de processamento: {(len(dados_base) / len(df_base) * 100):.1f}%")
     
     # 4. UNIFICAR DADOS
     print("\n=== Unificando dados ===")
@@ -234,8 +246,19 @@ def gerar_base_limpa():
     # Converter datas
     df['data_entrada'] = pd.to_datetime(df['data_entrada'], errors='coerce')
     df['data_encerramento'] = pd.to_datetime(df['data_encerramento'], errors='coerce')
-    # Remover linhas sem data_entrada válida
-    df = df[df['data_entrada'].notna()].copy()
+    
+    # Contar registros antes e depois da validação
+    total_antes = len(df)
+    registros_sem_data = df[df['data_entrada'].isna()].copy()
+    
+    # Se houver registros sem data_entrada, preencher com data padrão (primeira data disponível ou data atual)
+    if len(registros_sem_data) > 0:
+        print(f"AVISO: {len(registros_sem_data)} registros sem data_entrada válida. Preenchendo com data padrão...")
+        # Usar a primeira data válida como padrão, ou data atual se não houver
+        data_padrao = df['data_entrada'].min() if df['data_entrada'].notna().any() else pd.Timestamp.now()
+        df.loc[df['data_entrada'].isna(), 'data_entrada'] = data_padrao
+    
+    print(f"Registros após tratamento de datas: {len(df)} (antes: {total_antes})")
     
     # Garantir tipos numéricos
     df['impacto_financeiro'] = pd.to_numeric(df['impacto_financeiro'], errors='coerce').fillna(0.0).astype(float)
