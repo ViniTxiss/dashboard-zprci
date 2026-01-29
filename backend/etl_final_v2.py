@@ -116,9 +116,18 @@ def gerar_base_limpa():
         # Motivo de encerramento
         motivo_encerramento = str(row.get('Motivo encerramento', '')).strip() if pd.notna(row.get('Motivo encerramento')) else ''
         
-        # Status (se tem DATA ENCERRAMENTO, está encerrado)
+        # Status: usar motivo_encerramento (excluindo "Ativo" e "Sem Sentença")
+        # Valores que NÃO são encerramentos
+        nao_encerrados_valores = ['ativo', 'sem sentença', 'sem sentenca', 'fase recurso', 'fase de recurso']
+        motivo_lower = motivo_encerramento.lower() if motivo_encerramento else ''
+        
         status = 'Em Tramitação'
-        if pd.notna(data_encerramento):
+        if motivo_encerramento and motivo_encerramento.strip():
+            # Verificar se não é um dos valores não-encerrados
+            if not any(valor in motivo_lower for valor in nao_encerrados_valores):
+                status = 'Encerrado'
+        # Fallback: se não tem motivo mas tem data_encerramento, considerar encerrado
+        elif pd.notna(data_encerramento):
             status = 'Encerrado'
         
         # Detectar erro sistêmico baseado em motivo_encerramento
@@ -202,9 +211,18 @@ def gerar_base_limpa():
         # Motivo de encerramento
         motivo_encerramento = str(row.get('Motivo encerramento', '')).strip() if pd.notna(row.get('Motivo encerramento')) else ''
         
-        # Status
+        # Status: usar motivo_encerramento (excluindo "Ativo" e "Sem Sentença")
+        # Valores que NÃO são encerramentos
+        nao_encerrados_valores = ['ativo', 'sem sentença', 'sem sentenca', 'fase recurso', 'fase de recurso']
+        motivo_lower = motivo_encerramento.lower() if motivo_encerramento else ''
+        
         status = 'Em Tramitação'
-        if pd.notna(data_encerramento):
+        if motivo_encerramento and motivo_encerramento.strip():
+            # Verificar se não é um dos valores não-encerrados
+            if not any(valor in motivo_lower for valor in nao_encerrados_valores):
+                status = 'Encerrado'
+        # Fallback: se não tem motivo mas tem data_encerramento, considerar encerrado
+        elif pd.notna(data_encerramento):
             status = 'Encerrado'
         
         # Detectar erro sistêmico baseado em motivo_encerramento
@@ -251,14 +269,14 @@ def gerar_base_limpa():
     total_antes = len(df)
     registros_sem_data = df[df['data_entrada'].isna()].copy()
     
-    # Se houver registros sem data_entrada, preencher com data padrão (primeira data disponível ou data atual)
+    # NÃO preencher com data padrão - deixar como NaN
+    # Registros sem data_entrada válida serão ignorados nas análises de evolução
     if len(registros_sem_data) > 0:
-        print(f"AVISO: {len(registros_sem_data)} registros sem data_entrada válida. Preenchendo com data padrão...")
-        # Usar a primeira data válida como padrão, ou data atual se não houver
-        data_padrao = df['data_entrada'].min() if df['data_entrada'].notna().any() else pd.Timestamp.now()
-        df.loc[df['data_entrada'].isna(), 'data_entrada'] = data_padrao
+        print(f"AVISO: {len(registros_sem_data)} registros sem data_entrada válida. Estes registros NÃO serão contados na evolução da carteira.")
+        print(f"      Mantendo data_entrada como NaN para esses registros.")
     
     print(f"Registros após tratamento de datas: {len(df)} (antes: {total_antes})")
+    print(f"Registros com data_entrada válida: {df['data_entrada'].notna().sum()}")
     
     # Garantir tipos numéricos
     df['impacto_financeiro'] = pd.to_numeric(df['impacto_financeiro'], errors='coerce').fillna(0.0).astype(float)

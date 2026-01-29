@@ -991,36 +991,55 @@ class ScrollController {
 
     async loadReincidencia() {
         try {
+            console.log('loadReincidencia: Iniciando carregamento...');
+            
             // Carregar taxa de reincidência
-        const data = await api.getReincidencia();
-        const taxaEl = document.getElementById('taxa-reincidencia');
-        if (taxaEl) {
+            const data = await api.getReincidencia();
+            const taxaEl = document.getElementById('taxa-reincidencia');
+            if (taxaEl) {
                 taxaEl.textContent = formatPercent(data.taxa_reincidencia || 0);
-        }
+            }
             
             // Carregar tabela de reincidência por cliente
-            const tbody = document.querySelector('#table-reincidencia tbody');
-            if (tbody) {
-                try {
-                    const dataClientes = await api.getReincidenciaPorCliente();
-                    if (dataClientes && dataClientes.dados && dataClientes.dados.length > 0) {
-                        // Armazenar dados originais
-                        this.reincidenciaData = dataClientes.dados;
-                        // Aplicar filtros e ordenação
-                        this.renderReincidenciaTable();
-                    } else {
-                        this.reincidenciaData = [];
-                        tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:#718096;">Nenhum dado disponível</td></tr>';
-                    }
-                } catch (error) {
-                    console.error('Erro ao carregar tabela de reincidência:', error);
-                    if (tbody) {
-                        tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:#f56565;">Erro ao carregar dados</td></tr>';
-                    }
+            const tbody1 = document.querySelector('#table-reincidencia tbody');
+            const tbody2 = document.querySelector('#table-reincidencia-tipos tbody');
+            
+            if (!tbody1 && !tbody2) {
+                console.warn('loadReincidencia: Nenhuma tbody encontrada no DOM (aguardando...)');
+                // Aguardar um pouco e tentar novamente
+                await new Promise(resolve => setTimeout(resolve, 500));
+                const tbody1Retry = document.querySelector('#table-reincidencia tbody');
+                const tbody2Retry = document.querySelector('#table-reincidencia-tipos tbody');
+                if (!tbody1Retry && !tbody2Retry) {
+                    console.error('loadReincidencia: tbody não encontrado após retry');
+                    return;
                 }
             }
+            
+            console.log('loadReincidencia: Buscando dados de reincidência por cliente...');
+            const dataClientes = await api.getReincidenciaPorCliente();
+            console.log('loadReincidencia: Dados recebidos:', dataClientes);
+            
+            if (dataClientes && dataClientes.dados && dataClientes.dados.length > 0) {
+                console.log(`loadReincidencia: ${dataClientes.dados.length} registros recebidos`);
+                // Armazenar dados originais
+                this.reincidenciaData = dataClientes.dados;
+                // Aplicar filtros e ordenação
+                this.renderReincidenciaTable();
+                console.log('loadReincidencia: Tabela renderizada com sucesso');
+            } else {
+                console.warn('loadReincidencia: Nenhum dado retornado pela API');
+                this.reincidenciaData = [];
+                const emptyMsg = '<tr><td colspan="3" style="text-align:center;color:#718096;">Nenhum dado disponível</td></tr>';
+                if (tbody1) tbody1.innerHTML = emptyMsg;
+                if (tbody2) tbody2.innerHTML = emptyMsg;
+            }
         } catch (error) {
-            console.error('Erro ao carregar reincidência:', error);
+            console.error('loadReincidencia: Erro ao carregar reincidência:', error);
+            const tbody = document.querySelector('#table-reincidencia tbody');
+            if (tbody) {
+                tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:#f56565;">Erro ao carregar dados</td></tr>';
+            }
         }
     }
 
@@ -1090,23 +1109,42 @@ class ScrollController {
     }
 
     renderReincidenciaTable() {
-        const tbody = document.querySelector('#table-reincidencia tbody');
-        if (!tbody || !this.reincidenciaData) return;
+        // Renderizar em ambas as tabelas (seção reincidencia e tipos-acoes-reincidencia)
+        const tbody1 = document.querySelector('#table-reincidencia tbody');
+        const tbody2 = document.querySelector('#table-reincidencia-tipos tbody');
+        
+        if (!tbody1 && !tbody2) {
+            console.warn('renderReincidenciaTable: Nenhuma tbody encontrada');
+            return;
+        }
+        
+        if (!this.reincidenciaData || this.reincidenciaData.length === 0) {
+            console.warn('renderReincidenciaTable: reincidenciaData vazio ou não definido');
+            const emptyMsg = '<tr><td colspan="3" style="text-align:center;color:#718096;">Nenhum dado disponível</td></tr>';
+            if (tbody1) tbody1.innerHTML = emptyMsg;
+            if (tbody2) tbody2.innerHTML = emptyMsg;
+            return;
+        }
         
         const dadosFiltrados = this.aplicarFiltrosReincidencia(this.reincidenciaData);
         
         if (dadosFiltrados.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:#718096;">Nenhum resultado encontrado</td></tr>';
+            const emptyMsg = '<tr><td colspan="3" style="text-align:center;color:#718096;">Nenhum resultado encontrado</td></tr>';
+            if (tbody1) tbody1.innerHTML = emptyMsg;
+            if (tbody2) tbody2.innerHTML = emptyMsg;
             return;
         }
         
-        tbody.innerHTML = dadosFiltrados.map(item => `
+        const tableContent = dadosFiltrados.map(item => `
                 <tr>
                 <td>${item.nome_cliente || 'N/A'}</td>
                 <td>${formatNumber(item.qtd_processos || 0)}</td>
                 <td>${formatCurrency(item.resultado || 0)}</td>
                 </tr>
             `).join('');
+        
+        if (tbody1) tbody1.innerHTML = tableContent;
+        if (tbody2) tbody2.innerHTML = tableContent;
         }
 
     setupReincidenciaFilters() {

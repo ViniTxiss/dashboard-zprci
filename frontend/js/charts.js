@@ -506,10 +506,25 @@ async function renderEvolucaoChart() {
     }
     
     // Ordenar por período (mês/ano) para manter ordem cronológica
+    // Converter formato brasileiro (Nov/2023) para ordenação cronológica
     const sortedData = [...data.dados].sort((a, b) => {
         const periodoA = a.periodo || '';
         const periodoB = b.periodo || '';
-        return periodoA.localeCompare(periodoB);
+        
+        // Função para converter período brasileiro para data para ordenação
+        const parsePeriodo = (periodo) => {
+            const meses = {'Jan': 1, 'Fev': 2, 'Mar': 3, 'Abr': 4, 'Mai': 5, 'Jun': 6,
+                          'Jul': 7, 'Ago': 8, 'Set': 9, 'Out': 10, 'Nov': 11, 'Dez': 12};
+            const match = periodo.match(/(\w+)\/(\d+)/);
+            if (match) {
+                const mes = meses[match[1]] || 0;
+                const ano = parseInt(match[2]);
+                return ano * 100 + mes; // Criar número para ordenação (ex: 202311)
+            }
+            return 0;
+        };
+        
+        return parsePeriodo(periodoA) - parsePeriodo(periodoB);
     });
     
     // Debug: verificar dados de encerramentos
@@ -525,26 +540,26 @@ async function renderEvolucaoChart() {
             datasets: [{
                 label: 'Entradas',
                 data: sortedData.map(d => d.entradas || 0),
-                borderColor: 'rgb(49, 130, 206)', // Azul
-                backgroundColor: 'rgba(49, 130, 206, 0.1)',
+                borderColor: 'rgb(54, 162, 235)', // Azul vibrante
+                backgroundColor: 'rgba(54, 162, 235, 0.1)',
                 tension: 0.4,
                 fill: true,
                 pointRadius: 4,
                 pointHoverRadius: 6,
-                pointBackgroundColor: 'rgb(49, 130, 206)',
+                pointBackgroundColor: 'rgb(54, 162, 235)',
                 pointBorderColor: '#fff',
                 pointBorderWidth: 2,
                 borderWidth: 2
             }, {
                 label: 'Encerramentos',
                 data: encerramentosData,
-                borderColor: 'rgb(237, 137, 54)', // Laranja
-                backgroundColor: 'rgba(237, 137, 54, 0.1)',
+                borderColor: 'rgb(255, 159, 64)', // Laranja vibrante
+                backgroundColor: 'rgba(255, 159, 64, 0.1)',
                 tension: 0.4,
                 fill: true,
                 pointRadius: 4,
                 pointHoverRadius: 6,
-                pointBackgroundColor: 'rgb(237, 137, 54)',
+                pointBackgroundColor: 'rgb(255, 159, 64)',
                 pointBorderColor: '#fff',
                 pointBorderWidth: 2,
                 borderWidth: 2,
@@ -2422,82 +2437,35 @@ async function renderTiposAcoesChart() {
     }
 }
 
-// Gráfico Erro Sistêmico
+// Gráfico Erro Sistêmico - Quantidade por Objeto
 async function renderErroSistemicoChart() {
     try {
     const data = await api.getErroSistemico();
         
         if (!data || !data.dados || data.dados.length === 0) {
             console.warn('renderErroSistemicoChart: dados vazios');
+            // Mostrar totais mesmo sem dados detalhados
+            const canvas = document.getElementById('chart-erro-sistemico');
+            if (canvas) {
+                const ctx = canvas.getContext('2d');
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = '#666';
+                ctx.font = '14px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(`Total: ${data.total_erros || 0} casos`, canvas.width / 2, canvas.height / 2);
+            }
             return;
         }
     
         await createChartWithRetry('chart-erro-sistemico', {
         type: 'bar',
         data: {
-            labels: data.dados.map(d => d.objeto),
+            labels: data.dados.map(d => d.objeto || 'N/A'),
             datasets: [{
                 label: 'Quantidade de Erros',
-                data: data.dados.map(d => d.quantidade),
+                data: data.dados.map(d => d.quantidade || 0),
                 backgroundColor: 'rgba(245, 101, 101, 0.8)',
                 borderColor: 'rgb(245, 101, 101)',
-                borderWidth: 2
-            }]
-        },
-        options: defaultOptions
-    });
-    } catch (error) {
-        console.error('renderErroSistemicoChart: Erro ao renderizar:', error);
-    }
-}
-
-// Gráfico Erro Sistêmico por Tipo - Inclui Valor Pretendido
-async function renderPrejuizoErroCriticoChart() {
-    try {
-        const data = await api.getErroSistemico();
-        
-        if (!data || !data.dados || data.dados.length === 0) {
-            console.warn('renderPrejuizoErroCriticoChart: dados vazios');
-            return;
-        }
-        
-        // Usar valor pretendido se disponível, senão usar impacto
-        const valores = data.dados.map(d => {
-            const valor = d.valor_pretendido || d.impacto || 0;
-            return valor / 1000; // Converter para milhares
-        });
-        
-        const total = valores.reduce((a, b) => a + b, 0);
-        const percentuais = valores.map(v => total > 0 ? ((v / total) * 100).toFixed(1) : 0);
-        
-        const labels = data.dados.map((d, i) => 
-            `${d.objeto}\n${valores[i].toFixed(2)} Mil (${percentuais[i]}%)`
-        );
-    
-        await createChartWithRetry('chart-prejuizo-erro-critico', {
-        type: 'doughnut',
-        data: {
-                labels: labels,
-            datasets: [{
-                data: valores,
-                backgroundColor: [
-                    'rgba(245, 101, 101, 0.8)',
-                    'rgba(237, 137, 54, 0.8)',
-                    'rgba(251, 191, 36, 0.8)',
-                    'rgba(49, 130, 206, 0.8)',
-                        'rgba(72, 187, 120, 0.8)',
-                        'rgba(139, 92, 246, 0.8)',
-                        'rgba(236, 72, 153, 0.8)'
-                ],
-                borderColor: [
-                    'rgb(245, 101, 101)',
-                    'rgb(237, 137, 54)',
-                    'rgb(251, 191, 36)',
-                    'rgb(49, 130, 206)',
-                        'rgb(72, 187, 120)',
-                        'rgb(139, 92, 246)',
-                        'rgb(236, 72, 153)'
-                ],
                 borderWidth: 2
             }]
         },
@@ -2505,25 +2473,110 @@ async function renderPrejuizoErroCriticoChart() {
             ...defaultOptions,
             plugins: {
                 ...defaultOptions.plugins,
+                title: {
+                    display: true,
+                    text: `Total: ${data.total_erros || 0} casos | Prejuízo Real: ${formatCurrency(data.total_impacto || 0)}`,
+                    font: {
+                        size: 12,
+                        weight: 'bold'
+                    }
+                }
+            }
+        }
+    });
+    } catch (error) {
+        console.error('renderErroSistemicoChart: Erro ao renderizar:', error);
+    }
+}
+
+// Gráfico Erro Sistêmico - Comparação Valor Pretendido vs Prejuízo Real
+async function renderPrejuizoErroCriticoChart() {
+    try {
+        const data = await api.getErroSistemico();
+        
+        if (!data) {
+            console.warn('renderPrejuizoErroCriticoChart: dados vazios');
+            return;
+        }
+        
+        // Valores totais para comparação
+        const valorPretendido = data.total_valor_pretendido || 0;
+        const prejuizoReal = data.total_impacto || 0;
+        const quantidadeCasos = data.total_erros || 0;
+        
+        // Criar gráfico de barras comparativo
+        await createChartWithRetry('chart-prejuizo-erro-critico', {
+        type: 'bar',
+        data: {
+                labels: ['Valor Pretendido (Risco)', 'Prejuízo Real (Pago)'],
+            datasets: [{
+                label: 'Valor (R$)',
+                data: [valorPretendido, prejuizoReal],
+                backgroundColor: [
+                    'rgba(245, 101, 101, 0.8)',  // Vermelho para valor pretendido (risco)
+                    'rgba(72, 187, 120, 0.8)'    // Verde para prejuízo real (controlado)
+                ],
+                borderColor: [
+                    'rgb(245, 101, 101)',
+                    'rgb(72, 187, 120)'
+                ],
+                borderWidth: 2
+            }]
+        },
+        options: {
+            ...defaultOptions,
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                ...defaultOptions.plugins,
+                title: {
+                    display: true,
+                    text: `Erro Sistêmico: ${quantidadeCasos} casos | Economia: ${formatCurrency(valorPretendido - prejuizoReal)}`,
+                    font: {
+                        size: 14,
+                        weight: 'bold'
+                    }
+                },
+                legend: {
+                    display: false
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const label = context.label || '';
+                            const value = context.parsed.y || 0;
+                            const percentual = valorPretendido > 0 ? ((value / valorPretendido) * 100).toFixed(2) : 0;
+                            return `${label}: ${formatCurrency(value)} (${percentual}% do risco)`;
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
                     title: {
                         display: true,
-                        text: `Erro Sistêmico - Valor Pretendido Total: ${formatCurrency(data.total_valor_pretendido || data.total_impacto || 0)}`,
+                        text: 'Valor (R$)',
                         font: {
-                            size: 14,
+                            size: 12,
                             weight: 'bold'
                         }
                     },
-                legend: {
-                    position: 'right'
-                    },
-                    tooltip: {
-                        callbacks: {
-                            label: function(context) {
-                                const label = context.label || '';
-                                const value = context.parsed || 0;
-                                return `${label}: ${formatCurrency(value * 1000)}`;
-                            }
+                    ticks: {
+                        callback: function(value) {
+                            return formatCurrency(value);
                         }
+                    }
+                },
+                x: {
+                    title: {
+                        display: true,
+                        text: 'Comparação de Valores',
+                        font: {
+                            size: 12,
+                            weight: 'bold'
+                        }
+                    }
                 }
             }
         }

@@ -42,6 +42,20 @@ def aggregate_by_object(df: pd.DataFrame, group_col: str = 'objeto_acao') -> Lis
     return grouped.to_dict('records')
 
 
+def formatar_periodo_brasileiro(periodo_iso: str) -> str:
+    """Converte 2023-11 para Nov/2023"""
+    try:
+        if '-' in periodo_iso:
+            ano, mes = periodo_iso.split('-')
+            mes = int(mes)
+            meses = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 
+                     'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
+            return f"{meses[mes-1]}/{ano}"
+    except:
+        pass
+    return periodo_iso
+
+
 def calculate_evolution(df: pd.DataFrame, date_col: str = 'data_entrada') -> List[Dict]:
     """Calcula evolução temporal separando Entradas e Encerramentos"""
     df_copy = df.copy()
@@ -149,6 +163,9 @@ def calculate_evolution(df: pd.DataFrame, date_col: str = 'data_entrada') -> Lis
         evolution = evolution.fillna(0)
         evolution['entradas'] = evolution['entradas'].astype(int)
         evolution['encerramentos'] = evolution['encerramentos'].astype(int)
+        
+        # Converter período de formato ISO (2023-11) para brasileiro (Nov/2023)
+        evolution['periodo'] = evolution['periodo'].apply(formatar_periodo_brasileiro)
     else:
         evolution = pd.DataFrame(columns=['periodo', 'entradas', 'encerramentos'])
     
