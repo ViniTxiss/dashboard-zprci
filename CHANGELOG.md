@@ -5,11 +5,9 @@
 ### ✅ Alterações Realizadas
 
 #### 1. **DataLoader Atualizado**
-- ✅ Adaptado para ler arquivos Excel reais do projeto
-- ✅ Suporte para múltiplos arquivos:
-  - `Cópia de BASE GERAL - RCI SERVIÇOS - base material pronto.xlsx`
-  - `Cópia de Cópia de Relatório GERAL - RCI - 15 de Dezembro 2025.xlsx`
-  - `Cópia de Material Casos Críticos - RCI - 2025 - Base completa.xlsx`
+- ✅ Refatorado para usar apenas `DADOS_NOVOS_CASOS.xlsx`
+- ✅ Arquivo padrão contém estritamente os dados dos PDFs recentes
+- ✅ Removida dependência de arquivos legados
 - ✅ Mapeamento automático de colunas do arquivo real para formato interno
 - ✅ Cálculo de campos derivados (tempo_tramitacao, area_interna, etc.)
 - ✅ Tratamento de valores nulos e dados ausentes
@@ -56,7 +54,7 @@ Mapeamento implementado:
 ### 🔧 Próximos Passos Recomendados
 1. Enriquecer dados de reiterações com arquivo de casos críticos
 2. Melhorar detecção de erros sistêmicos
-3. Adicionar mais campos do arquivo BASE GERAL se necessário
+3. Garantir que DADOS_NOVOS_CASOS.xlsx contenha todos os campos necessários
 4. Ajustar cálculos de SLA baseado em regras de negócio reais
 
 ### 📝 Notas

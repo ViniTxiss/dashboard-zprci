@@ -106,19 +106,24 @@
         <div class="slide-content">
             <h2 class="slide-title" data-animate="step" data-delay="0">Saldo: Entradas vs. Encerramentos</h2>
             <p class="slide-subtitle" data-animate="step" data-delay="80">Análise por Objeto da Ação</p>
-            <div class="table-wrapper table-wrapper-scroll table-saldo-wrapper" data-animate="step" data-delay="150">
-                <div class="table-container table-container-scroll">
-                    <table id="table-saldo">
-                        <thead>
-                            <tr>
-                                <th class="sortable" data-col="objeto">OBJETO DA AÇÃO</th>
-                                <th class="sortable" data-col="entradas">Qtd. Entradas</th>
-                                <th class="sortable" data-col="encerramentos">Qtd. Encerramentos</th>
-                                <th class="sortable" data-col="saldo">Saldo</th>
-                            </tr>
-                        </thead>
-                        <tbody></tbody>
-                    </table>
+            <div class="content-grid" data-animate="step" data-delay="150">
+                <div class="chart-container" data-animate="step" data-delay="200">
+                    <canvas id="chart-saldo"></canvas>
+                </div>
+                <div class="table-wrapper table-wrapper-scroll table-saldo-wrapper" data-animate="step" data-delay="250">
+                    <div class="table-container table-container-scroll">
+                        <table id="table-saldo">
+                            <thead>
+                                <tr>
+                                    <th class="sortable" data-col="objeto">OBJETO DA AÇÃO</th>
+                                    <th class="sortable" data-col="entradas">Qtd. Entradas</th>
+                                    <th class="sortable" data-col="encerramentos">Qtd. Encerramentos</th>
+                                    <th class="sortable" data-col="saldo">Saldo</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
         </div>
@@ -230,6 +235,12 @@
                     <canvas id="chart-solicitacoes-prazo-area"></canvas>
                 </div>
             </div>
+            <div class="chart-container" data-animate="step" data-delay="200" style="margin-top: 1rem;">
+                <canvas id="chart-solicitacoes-prazo"></canvas>
+            </div>
+            <p class="slide-footer" data-animate="step" data-delay="200" style="margin-top: 1rem; text-align: center; font-size: 0.9rem; color: #666;">
+                SLA D+2 (Ref. Boletim 10/2025)
+            </p>
         </div>
     </section>
 
@@ -317,7 +328,9 @@
                         </table>
                     </div>
                 </div>
-                
+                <div class="chart-container" data-animate="step" data-delay="400">
+                    <canvas id="chart-sentencas-por-area"></canvas>
+                </div>
             </div>
             
         </div>
@@ -443,11 +456,77 @@
     <!-- Scripts -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="js/state.js"></script>
     <script src="js/api.js"></script>
     <script src="js/charts.js"></script>
     <script src="js/maps.js"></script>
     <script src="js/animations.js"></script>
     <script src="js/scroll.js"></script>
     <script src="js/sequence.js"></script>
+    
+    <!-- Script de inicialização e verificação de dependências -->
+    <script>
+        // Verificar dependências críticas após carregamento
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('=== Verificação de Dependências ===');
+            
+            // Verificar Chart.js
+            if (typeof Chart !== 'undefined') {
+                console.log('✓ Chart.js carregado');
+            } else {
+                console.error('✗ Chart.js NÃO carregado!');
+            }
+            
+            // Verificar window.chartFunctions
+            if (window.chartFunctions && typeof window.chartFunctions === 'object') {
+                console.log('✓ window.chartFunctions disponível');
+                console.log('  Funções disponíveis:', Object.keys(window.chartFunctions).slice(0, 10).join(', '), '...');
+            } else {
+                console.error('✗ window.chartFunctions NÃO disponível!');
+            }
+            
+            // Verificar DashboardState
+            if (typeof DashboardState !== 'undefined') {
+                console.log('✓ DashboardState disponível');
+            } else {
+                console.warn('⚠ DashboardState não disponível');
+            }
+            
+            // Verificar API
+            if (typeof api !== 'undefined') {
+                console.log('✓ API client disponível');
+            } else {
+                console.error('✗ API client NÃO disponível!');
+            }
+            
+            // Verificar ScrollController
+            if (window.scrollController) {
+                console.log('✓ ScrollController inicializado');
+            } else {
+                console.warn('⚠ ScrollController não inicializado ainda');
+            }
+            
+            // Verificar elementos canvas principais
+            const mainCanvases = [
+                'chart-acoes-ganhas-perdidas',
+                'chart-evolucao',
+                'chart-impacto-rosca',
+                'chart-impacto-base',
+                'chart-sla-area'
+            ];
+            
+            console.log('=== Verificação de Canvas ===');
+            mainCanvases.forEach(canvasId => {
+                const canvas = document.getElementById(canvasId);
+                if (canvas) {
+                    console.log(`✓ Canvas ${canvasId} encontrado`);
+                } else {
+                    console.warn(`⚠ Canvas ${canvasId} NÃO encontrado`);
+                }
+            });
+            
+            console.log('=== Verificação Concluída ===');
+        });
+    </script>
 </body>
 </html>

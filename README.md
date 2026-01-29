@@ -30,7 +30,7 @@ dashboard/
 │   │   ├── mapas.py           # Rotas de mapas
 │   │   └── indicadores.py     # Rotas de indicadores
 │   └── data/
-│       └── .gitkeep            # Dados: use BASEGERAL_ATUALIZADA.xlsx em backend/data/
+│       └── .gitkeep            # Dados: use DADOS_NOVOS_CASOS.xlsx em backend/data/
 │
 ├── frontend/
 │   ├── index.html             # Página principal
@@ -100,14 +100,14 @@ O frontend estará disponível em: `http://localhost:8080`
 
 ## 📊 Como Trocar a Base de Dados
 
-### Arquivo principal: CSV unificado
+### Arquivo principal: DADOS_NOVOS_CASOS.xlsx
 
-O sistema usa por padrão **`BASEGERAL_ATUALIZADA.xlsx`** em `backend/data/` (ou `BASEGERAL_ATUALIZADA.csv` como fallback).  
+O sistema utiliza **`DADOS_NOVOS_CASOS.xlsx`** gerado a partir dos PDFs oficiais em `backend/data/`.  
 Se o arquivo não existir, o sistema usa DataFrame vazio e as APIs retornam listas vazias.
 
-### Método 1: Usar o arquivo Excel/CSV
+### Método 1: Usar o arquivo Excel
 
-1. Coloque o arquivo **`BASEGERAL_ATUALIZADA.xlsx`** ou **`BASEGERAL_ATUALIZADA.csv`** em `backend/data/`.
+1. Coloque o arquivo **`DADOS_NOVOS_CASOS.xlsx`** em `backend/data/`.
 2. Formato CSV: `sep=';'`, `decimal=','`, encoding UTF-8.
 3. Colunas usadas (entre outras): `Data de Entrada`, `Data do Encerramento`, `Descricao do Tipo de Ação`, `OBJETO DA AÇÃO`, `Estado`, `Status`, `Valor da Causa Atual`, `Pólo Ativo`, `Número do Processo`, `Situação`, `Quantidade de Reiterações`, `Area Responsável`, `Sentença Favorável/Desfavorável`, `Valor - Impacto Negativo`, `DATA ENTRADA`, `DATA ENCERRAMENTO`, `Motivo encerramento`.
 
@@ -348,7 +348,7 @@ Coloque seus logos em `frontend/assets/logos/` e atualize o HTML:
 
 ## 📝 Notas Importantes
 
-1. **Dados Mock**: Se não houver `BASEGERAL_ATUALIZADA.xlsx` nem `BASEGERAL_ATUALIZADA.csv`, o sistema usa DataFrame vazio e as APIs retornam listas vazias
+1. **Dados**: O sistema utiliza `DADOS_NOVOS_CASOS.xlsx` gerado a partir dos PDFs oficiais. Se o arquivo não existir, o sistema usa DataFrame vazio e as APIs retornam listas vazias
 2. **CORS**: O backend está configurado para aceitar requisições de qualquer origem (desenvolvimento)
 3. **Performance**: Gráficos são renderizados apenas quando a seção entra em viewport (lazy loading)
 4. **Responsividade**: O dashboard é responsivo e funciona em diferentes tamanhos de tela

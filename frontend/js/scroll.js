@@ -32,6 +32,42 @@ class ScrollController {
         this.init();
     }
 
+    /**
+     * Aguarda até window.chartFunctions estar disponível
+     * @param {number} maxWait - Tempo máximo de espera em ms (padrão: 5000ms)
+     * @returns {Promise<boolean>} true se disponível, false se timeout
+     */
+    async waitForChartFunctions(maxWait = 5000) {
+        const startTime = Date.now();
+        while (Date.now() - startTime < maxWait) {
+            if (window.chartFunctions && typeof window.chartFunctions === 'object') {
+                console.log('ScrollController: window.chartFunctions disponível');
+                return true;
+            }
+            await new Promise(resolve => setTimeout(resolve, 100));
+        }
+        console.warn('ScrollController: window.chartFunctions não disponível após', maxWait, 'ms');
+        return false;
+    }
+
+    /**
+     * Aguarda até Chart.js estar disponível
+     * @param {number} maxWait - Tempo máximo de espera em ms (padrão: 5000ms)
+     * @returns {Promise<boolean>} true se disponível, false se timeout
+     */
+    async waitForChartJS(maxWait = 5000) {
+        const startTime = Date.now();
+        while (Date.now() - startTime < maxWait) {
+            if (typeof Chart !== 'undefined') {
+                console.log('ScrollController: Chart.js disponível');
+                return true;
+            }
+            await new Promise(resolve => setTimeout(resolve, 100));
+        }
+        console.warn('ScrollController: Chart.js não disponível após', maxWait, 'ms');
+        return false;
+    }
+
     init() {
         // Observar seções para carregar dados quando entrarem em viewport
         const sectionObserver = new IntersectionObserver((entries) => {
@@ -318,8 +354,15 @@ class ScrollController {
 
     async loadSectionData(section) {
         const sectionId = section.id;
+        console.log(`ScrollController.loadSectionData: Carregando seção "${sectionId}"`);
 
         try {
+            // Aguardar dependências críticas antes de processar
+            const chartFunctionsReady = await this.waitForChartFunctions(3000);
+            if (!chartFunctionsReady) {
+                console.warn(`ScrollController.loadSectionData: window.chartFunctions não disponível para seção "${sectionId}"`);
+            }
+
             switch (sectionId) {
                 case 'entradas-encerrados':
                     await this.loadEntradas();
@@ -338,9 +381,11 @@ class ScrollController {
                     await this.loadEstatisticasGerais();
                     break;
                 case 'dashboard-acoes-ganhas-perdidas':
+                    console.log('ScrollController: Executando case dashboard-acoes-ganhas-perdidas');
                     await this.loadAcoesGanhasPerdidas();
                     break;
                 case 'evolucao':
+                    console.log('ScrollController: Executando case evolucao');
                     await this.loadEvolucao();
                     break;
                 case 'mapa-nacional':
@@ -360,6 +405,7 @@ class ScrollController {
                     await this.loadCasosImpacto();
                     break;
                 case 'sla-area':
+                    console.log('ScrollController: Executando case sla-area');
                     await this.loadSLAArea();
                     await this.loadSolicitacoesPrazo();
                     break;
@@ -412,6 +458,7 @@ class ScrollController {
                     await this.loadKPIsFinais();
                     break;
                 case 'slide-analise-impacto':
+                    console.log('ScrollController: Executando case slide-analise-impacto');
                     await this.loadSlideAnaliseImpacto();
                     break;
             }
@@ -1177,7 +1224,28 @@ class ScrollController {
 
     async loadSlideAnaliseImpacto() {
         console.log('loadSlideAnaliseImpacto: Iniciando carregamento');
+        
         try {
+            // Aguardar dependências
+            const chartFunctionsReady = await this.waitForChartFunctions(3000);
+            const chartJSReady = await this.waitForChartJS(3000);
+            
+            if (!chartFunctionsReady || !chartJSReady) {
+                console.error('loadSlideAnaliseImpacto: Dependências não disponíveis');
+                return;
+            }
+            
+            // Verificar se elementos existem
+            const canvasRosc = document.getElementById('chart-impacto-rosca');
+            const canvasBase = document.getElementById('chart-impacto-base');
+            const mapContainer = document.getElementById('map-analise-impacto');
+            
+            console.log('loadSlideAnaliseImpacto: Elementos encontrados:', {
+                canvasRosc: !!canvasRosc,
+                canvasBase: !!canvasBase,
+                mapContainer: !!mapContainer
+            });
+            
             if (window.chartFunctions && window.chartFunctions.renderSlideImpacto) {
                 console.log('loadSlideAnaliseImpacto: Função encontrada, chamando renderSlideImpacto');
                 await window.chartFunctions.renderSlideImpacto(null);
@@ -1188,6 +1256,7 @@ class ScrollController {
             }
         } catch (error) {
             console.error('loadSlideAnaliseImpacto: Erro ao carregar:', error);
+            console.error('loadSlideAnaliseImpacto: Stack:', error.stack);
         }
     }
 

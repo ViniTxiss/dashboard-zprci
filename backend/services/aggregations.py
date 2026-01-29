@@ -752,8 +752,11 @@ def get_pareto_impact(df: pd.DataFrame) -> Dict[str, Any]:
     """Curva de Impacto Financeiro (Pareto)"""
     pareto = calculate_pareto(df)
     
+    # Sanitizar para JSON (defesa em profundidade)
+    pareto_sanitized = _sanitize_for_json(pareto)
+    
     return {
-        'dados': pareto
+        'dados': pareto_sanitized
     }
 
 
@@ -954,6 +957,10 @@ def get_action_types_2025(df: pd.DataFrame) -> Dict[str, Any]:
 
 def get_systemic_errors(df: pd.DataFrame) -> Dict[str, Any]:
     """Erro Sistêmico (TI) - Inclui valor pretendido para evidenciar cenário pior"""
+    # Verificação defensiva: garantir que coluna 'erro_sistemico' existe
+    if 'erro_sistemico' not in df.columns:
+        df['erro_sistemico'] = False
+    
     errors = df[df['erro_sistemico'] == True].copy()
     
     # Criar coluna auxiliar para contagem se data_entrada não existir
@@ -999,9 +1006,13 @@ def get_top_reiterations(df: pd.DataFrame) -> Dict[str, Any]:
 
 def get_final_kpis(df: pd.DataFrame) -> Dict[str, Any]:
     """KPIs Finais"""
+    # Verificação defensiva: garantir que colunas críticas existem
+    if 'critico' not in df.columns:
+        df['critico'] = False
+    
     total_casos = df.shape[0]
-    total_impacto = df['impacto_financeiro'].sum()
-    media_impacto = df['impacto_financeiro'].mean()
+    total_impacto = df['impacto_financeiro'].sum() if 'impacto_financeiro' in df.columns else 0
+    media_impacto = df['impacto_financeiro'].mean() if 'impacto_financeiro' in df.columns else 0
     casos_criticos = df[df['critico'] == True].shape[0]
     encerrados_mask = _is_encerrado(df)
     taxa_encerramento = (encerrados_mask.sum() / total_casos * 100) if total_casos > 0 else 0
@@ -1134,31 +1145,46 @@ def get_dashboard_acoes_ganhas_perdidas(df: pd.DataFrame) -> Dict[str, Any]:
         else:
             encerrados['valor_acordo_real'] = 0
         
-        # Classificar casos
-        # Ganhas: Extinção, Improcedência
-        ganhas_mask = (
-            encerrados['motivo_normalizado'].str.contains('extinção|extincao|extinto', case=False, na=False) |
-            encerrados['motivo_normalizado'].str.contains('improcedência|improcedencia|improcedente', case=False, na=False) |
-            encerrados['sentenca'].str.contains('Favorável', case=False, na=False)
-        )
+        # Classificar casos - PRIORIZAR motivo_encerramento, usar sentenca como fallback
         
-        # Acordo Antes Sentença (verificar se há indicação de acordo antes da sentença)
+        # 1. ACORDO ANTES SENTENÇA (prioridade máxima - verificar primeiro)
         acordo_antes_mask = (
-            encerrados['motivo_normalizado'].str.contains('acordo.*antes|antes.*sentença|antes.*sentenca', case=False, na=False) |
-            (encerrados['motivo_normalizado'].str.contains('acordo', case=False, na=False) & 
-             ~encerrados['motivo_normalizado'].str.contains('pós|pos|depois', case=False, na=False))
+            encerrados['motivo_normalizado'].str.contains('acordo.*antes|antes.*sentença|antes.*sentenca', case=False, na=False)
         )
         
-        # Perdidas: Pagamento Condenação, Acordo Pós Sentença, Condenação Sem Ônus
-        perdidas_mask = (
+        # 2. GANHAS: Extinção, Improcedência (por motivo_encerramento)
+        # OU sentenca Favorável (quando motivo não indica perdida)
+        ganhas_por_motivo = (
+            encerrados['motivo_normalizado'].str.contains('extinção|extincao|extinto', case=False, na=False) |
+            encerrados['motivo_normalizado'].str.contains('improcedência|improcedencia|improcedente', case=False, na=False)
+        )
+        
+        # Ganhas por sentença (fallback): apenas se não for classificado como perdida por motivo
+        ganhas_por_sentenca = (
+            encerrados['sentenca'].astype(str).str.contains('Favorável|Favoravel', case=False, na=False) &
+            ~encerrados['motivo_normalizado'].str.contains('acordo.*pós|acordo.*pos|pagamento.*condenação|condenação.*sem.*ônus', case=False, na=False)
+        )
+        
+        ganhas_mask = ganhas_por_motivo | ganhas_por_sentenca
+        ganhas_mask = ganhas_mask & ~acordo_antes_mask  # Remover acordos antes sentença
+        
+        # 3. PERDIDAS: Pagamento Condenação, Acordo Pós Sentença, Condenação Sem Ônus (por motivo)
+        # OU sentenca Desfavorável (quando motivo não indica ganha)
+        perdidas_por_motivo = (
             encerrados['motivo_normalizado'].str.contains('pagamento.*condenação|pagamento.*condenacao', case=False, na=False) |
             encerrados['motivo_normalizado'].str.contains('acordo.*pós|acordo.*pos|acordo.*depois|pós.*sentença|pos.*sentenca', case=False, na=False) |
-            encerrados['motivo_normalizado'].str.contains('condenação.*sem.*ônus|condenacao.*sem.*onus', case=False, na=False) |
-            encerrados['sentenca'].str.contains('Desfavorável', case=False, na=False)
+            encerrados['motivo_normalizado'].str.contains('condenação.*sem.*ônus|condenacao.*sem.*onus', case=False, na=False)
         )
         
-        # Remover acordo antes sentença das perdidas se estiver classificado
-        perdidas_mask = perdidas_mask & ~acordo_antes_mask
+        # Perdidas por sentença (fallback): apenas se não for classificado como ganha por motivo
+        perdidas_por_sentenca = (
+            encerrados['sentenca'].astype(str).str.contains('Desfavorável|Desfavoravel', case=False, na=False) &
+            ~ganhas_por_motivo
+        )
+        
+        perdidas_mask = perdidas_por_motivo | perdidas_por_sentenca
+        perdidas_mask = perdidas_mask & ~acordo_antes_mask  # Remover acordos antes sentença
+        perdidas_mask = perdidas_mask & ~ganhas_mask  # Remover ganhas
         
         # Calcular estatísticas
         ganhas = encerrados[ganhas_mask].copy()
@@ -1180,6 +1206,10 @@ def get_dashboard_acoes_ganhas_perdidas(df: pd.DataFrame) -> Dict[str, Any]:
         # Acordo Antes Sentença
         qtd_acordo_antes = len(acordo_antes)
         valor_pretendido_acordo = acordo_antes['valor_pretendido'].sum() if len(acordo_antes) > 0 else 0.0
+        # Se valor_pretendido for 0, usar impacto_financeiro como fallback
+        if valor_pretendido_acordo == 0 and len(acordo_antes) > 0:
+            valor_pretendido_acordo = acordo_antes['impacto_financeiro'].sum() if 'impacto_financeiro' in acordo_antes.columns else 0.0
+        
         valor_acordo_total = acordo_antes['valor_acordo_real'].sum() if len(acordo_antes) > 0 else 0.0
         # Se não houver valor_acordo_real, usar impacto_financeiro como aproximação
         if valor_acordo_total == 0 and len(acordo_antes) > 0:

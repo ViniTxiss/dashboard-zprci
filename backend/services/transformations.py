@@ -3,6 +3,7 @@ Transformações de Dados
 Funções para transformar e preparar dados para visualização
 """
 
+import numpy as np
 import pandas as pd
 from datetime import datetime, timedelta
 from typing import Dict, List, Any
@@ -182,18 +183,54 @@ def calculate_average_time(df: pd.DataFrame) -> Dict[str, Any]:
     }
 
 
+def _sanitize_dict(d: Dict) -> Dict:
+    """Sanitiza valores em um dicionário, substituindo inf/nan por 0.0"""
+    return {
+        k: (0.0 if (isinstance(v, (float, np.floating)) and (np.isnan(v) or np.isinf(v))) else v)
+        for k, v in d.items()
+    }
+
+
 def calculate_pareto(df: pd.DataFrame, value_col: str = 'impacto_financeiro', 
                      category_col: str = 'objeto_acao') -> List[Dict]:
-    """Calcula curva de Pareto"""
-    grouped = df.groupby(category_col)[value_col].sum().reset_index()
+    """Calcula curva de Pareto com sanitização de valores infinitos/NaN"""
+    # Verificação defensiva: garantir que colunas existem
+    if value_col not in df.columns or category_col not in df.columns:
+        return []
+    
+    # Filtrar valores inválidos antes de agrupar
+    df_clean = df[[value_col, category_col]].copy()
+    df_clean[value_col] = pd.to_numeric(df_clean[value_col], errors='coerce').fillna(0.0)
+    df_clean = df_clean[df_clean[value_col].notna()]
+    
+    # Remover infinitos
+    df_clean = df_clean[~df_clean[value_col].isin([float('inf'), float('-inf')])]
+    
+    if len(df_clean) == 0:
+        return []
+    
+    grouped = df_clean.groupby(category_col)[value_col].sum().reset_index()
     grouped = grouped.sort_values(value_col, ascending=False)
     
     total = grouped[value_col].sum()
-    grouped['acumulado'] = grouped[value_col].cumsum()
-    grouped['percentual_acumulado'] = (grouped['acumulado'] / total) * 100
-    grouped['percentual'] = (grouped[value_col] / total) * 100
     
-    return grouped.to_dict('records')
+    # Proteção contra divisão por zero
+    if total == 0 or np.isnan(total) or np.isinf(total):
+        grouped['acumulado'] = 0.0
+        grouped['percentual_acumulado'] = 0.0
+        grouped['percentual'] = 0.0
+    else:
+        grouped['acumulado'] = grouped[value_col].cumsum()
+        grouped['percentual_acumulado'] = (grouped['acumulado'] / total) * 100
+        grouped['percentual'] = (grouped[value_col] / total) * 100
+    
+    # Sanitizar valores infinitos e NaN antes de retornar
+    grouped = grouped.replace([np.inf, -np.inf], 0.0)
+    grouped = grouped.fillna(0.0)
+    
+    # Converter para dict e sanitizar novamente (defesa em profundidade)
+    result = grouped.to_dict('records')
+    return [_sanitize_dict(d) for d in result]
 
 
 def filter_critical_cases(df: pd.DataFrame, top_n: int = 20) -> List[Dict]:
@@ -222,10 +259,23 @@ def filter_critical_cases(df: pd.DataFrame, top_n: int = 20) -> List[Dict]:
         except (ValueError, TypeError):
             return default
     
+    # Verificação defensiva: garantir que coluna 'critico' existe
+    if 'critico' not in df.columns:
+        # Se não existe, criar com valores False
+        df['critico'] = False
+    
+    # Verificar se há dados antes de filtrar
+    if df.empty:
+        return []
+    
     critical = df[df['critico'] == True].copy()
     
     if critical.empty:
-        critical = df.nlargest(top_n, 'impacto_financeiro')
+        # Se não há casos críticos, usar os top_n por impacto financeiro
+        if 'impacto_financeiro' in df.columns:
+            critical = df.nlargest(top_n, 'impacto_financeiro')
+        else:
+            return []
     
     critical = critical.sort_values('impacto_financeiro', ascending=False).head(top_n)
     
@@ -419,6 +469,10 @@ def calculate_sentences_by_area(df: pd.DataFrame) -> List[Dict]:
 
 def calculate_reincidence(df: pd.DataFrame) -> Dict[str, Any]:
     """Calcula taxa de reincidência"""
+    # Verificação defensiva: garantir que coluna 'reincidencia' existe
+    if 'reincidencia' not in df.columns:
+        df['reincidencia'] = False
+    
     total = df.shape[0]
     reincidentes = df[df['reincidencia'] == True].shape[0]
     

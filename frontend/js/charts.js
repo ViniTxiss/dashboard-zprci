@@ -8,6 +8,83 @@ const chartCreationLocks = {}; // Evitar criação simultânea do mesmo gráfico
 const DEBUG_MODE = false; // Desabilitar logs em produção
 
 /**
+ * Sistema Global de Cores - Color Registry
+ * Garante consistência visual entre todos os gráficos e mapas
+ */
+const CONST_COLORS = {
+    // Cores por UF (27 estados + DF) - Paleta azul harmoniosa
+    uf: {
+        'AC': '#2563eb', 'AL': '#3b82f6', 'AP': '#60a5fa',
+        'AM': '#93c5fd', 'BA': '#1e40af', 'CE': '#1e3a8a',
+        'DF': '#1d4ed8', 'ES': '#2563eb', 'GO': '#3b82f6',
+        'MA': '#60a5fa', 'MT': '#93c5fd', 'MS': '#1e40af',
+        'MG': '#1e3a8a', 'PA': '#1d4ed8', 'PB': '#2563eb',
+        'PR': '#3b82f6', 'PE': '#60a5fa', 'PI': '#93c5fd',
+        'RJ': '#1e40af', 'RN': '#1e3a8a', 'RS': '#1d4ed8',
+        'RO': '#2563eb', 'RR': '#3b82f6', 'SC': '#60a5fa',
+        'SP': '#1e40af', 'SE': '#1e3a8a', 'TO': '#1d4ed8'
+    },
+    // Cores por Área
+    area: {
+        'Operações': '#3182ce',
+        'Cobranças': '#667eea',
+        'Jurídico Interno': '#8b5cf6',
+        'Não Informado': '#9ca3af'
+    },
+    // Cores semânticas
+    semantic: {
+        positivo: '#48bb78',    // Verde
+        negativo: '#f56565',    // Vermelho
+        neutro: '#4299e1',      // Azul
+        atencao: '#ed8936',     // Laranja
+        acima_meta: '#dc2626',  // Vermelho escuro
+        abaixo_meta: '#22c55e'  // Verde escuro
+    }
+};
+
+/**
+ * Converte cor hexadecimal para rgba
+ * @param {string} hex - Cor em formato hexadecimal (#RRGGBB)
+ * @param {number} opacity - Opacidade (0-1), padrão 1
+ * @returns {string} Cor em formato rgba(r, g, b, opacity)
+ */
+function hexToRgba(hex, opacity = 1) {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return `rgba(${r}, ${g}, ${b}, ${opacity})`;
+}
+
+/**
+ * Retorna cor consistente para um label (UF ou Área)
+ * Garante que a mesma UF/Área sempre use a mesma cor em todos os gráficos
+ * @param {string} label - UF (ex: 'SP') ou Área (ex: 'Operações')
+ * @param {string} type - 'uf' ou 'area', padrão 'uf'
+ * @param {number} opacity - Opacidade (0-1), padrão 0.8
+ * @returns {string} Cor em formato rgba
+ */
+function getColor(label, type = 'uf', opacity = 0.8) {
+    if (!label) {
+        // Fallback para label vazio
+        return hexToRgba(CONST_COLORS.uf['SP'], opacity);
+    }
+    
+    const colorMap = CONST_COLORS[type] || CONST_COLORS.uf;
+    const hex = colorMap[label] || colorMap[label.toUpperCase()] || colorMap['SP']; // Fallback para SP
+    return hexToRgba(hex, opacity);
+}
+
+/**
+ * Retorna cor de borda (opacidade 1.0) para um label
+ * @param {string} label - UF ou Área
+ * @param {string} type - 'uf' ou 'area'
+ * @returns {string} Cor em formato rgba com opacidade 1.0
+ */
+function getBorderColor(label, type = 'uf') {
+    return getColor(label, type, 1.0);
+}
+
+/**
  * Valida dados numéricos para gráficos
  */
 function validateChartData(data, minLength = 1) {
@@ -50,6 +127,44 @@ function isElementVisible(element) {
            rect.bottom > 0 &&
            rect.left < window.innerWidth &&
            rect.right > 0;
+}
+
+/**
+ * Mostra mensagem de erro amigável no canvas quando um gráfico falha
+ * @param {string} canvasId - ID do elemento canvas
+ * @param {string} message - Mensagem de erro a exibir
+ */
+function showChartError(canvasId, message = 'Sem dados para esta seleção') {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) {
+        console.warn(`showChartError: Canvas ${canvasId} não encontrado`);
+        return;
+    }
+    
+    try {
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+        
+        // Limpar canvas
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        // Configurar estilo
+        ctx.fillStyle = '#666';
+        ctx.font = '16px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        
+        // Desenhar mensagem centralizada
+        const centerX = canvas.width / 2;
+        const centerY = canvas.height / 2;
+        ctx.fillText(message, centerX, centerY);
+        
+        // Adicionar ícone ou símbolo visual (opcional)
+        ctx.font = '48px Arial';
+        ctx.fillText('📊', centerX, centerY - 40);
+    } catch (error) {
+        console.error(`showChartError: Erro ao exibir mensagem no canvas ${canvasId}:`, error);
+    }
 }
 
 /**
@@ -105,7 +220,7 @@ function createChart(canvasId, config) {
         console.error(`createChart: Chart.js não está carregado para ${canvasId}`);
         return null;
     }
-    
+
     const canvas = document.getElementById(canvasId);
     if (!canvas) {
         console.warn(`createChart: Canvas ${canvasId} não encontrado no DOM`);
@@ -169,13 +284,13 @@ function createChart(canvasId, config) {
             return null;
         }
         
-        const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d');
         if (!ctx) {
             console.error(`createChart: Não foi possível obter contexto 2D para ${canvasId}`);
             return null;
         }
 
-        const chart = new Chart(ctx, config);
+    const chart = new Chart(ctx, config);
     chartInstances[canvasId] = chart;
         chartCreationLocks[canvasId] = false; // Marcar como concluído
         delete chartCreationLocks[canvasId]; // Remover completamente
@@ -202,13 +317,13 @@ function createChart(canvasId, config) {
             resizeObservers[canvasId] = resizeObserver;
         }
         
-        console.log(`createChart: Gráfico ${canvasId} criado com sucesso`, {
-            canvasWidth: canvas.width || containerWidth,
-            canvasHeight: canvas.height || containerHeight,
-            containerWidth: containerWidth,
-            containerHeight: containerHeight,
-            isVisible: isElementVisible(canvas)
-        });
+    console.log(`createChart: Gráfico ${canvasId} criado com sucesso`, {
+                canvasWidth: canvas.width || containerWidth,
+                canvasHeight: canvas.height || containerHeight,
+                containerWidth: containerWidth,
+                containerHeight: containerHeight,
+                isVisible: isElementVisible(canvas)
+    });
     
     return chart;
     } catch (error) {
@@ -328,7 +443,13 @@ const defaultOptions = {
 
 // Gráfico de Saldo
 async function renderSaldoChart() {
+    try {
     const data = await api.getSaldo();
+        
+        if (!data) {
+            showChartError('chart-saldo', 'Sem dados para esta seleção');
+            return;
+        }
     
     createChart('chart-saldo', {
         type: 'bar',
@@ -336,7 +457,7 @@ async function renderSaldoChart() {
             labels: ['Entradas', 'Encerrados', 'Saldo'],
             datasets: [{
                 label: 'Quantidade',
-                data: [data.entradas, data.encerrados, data.saldo],
+                    data: [data.entradas || 0, data.encerrados || 0, data.saldo || 0],
                 backgroundColor: [
                     'rgba(49, 130, 206, 0.8)',
                     'rgba(72, 187, 120, 0.8)',
@@ -352,10 +473,31 @@ async function renderSaldoChart() {
         },
         options: defaultOptions
     });
+    } catch (error) {
+        console.error('renderSaldoChart: Erro ao renderizar:', error);
+        showChartError('chart-saldo', 'Erro ao carregar gráfico');
+    }
 }
 
 // Gráfico de Evolução: Entradas vs. Encerramentos por Mês
 async function renderEvolucaoChart() {
+    console.log('renderEvolucaoChart: Iniciando renderização');
+    
+    // Verificar Chart.js
+    if (typeof Chart === 'undefined') {
+        console.error('renderEvolucaoChart: Chart.js não está disponível');
+        showChartError('chart-evolucao', 'Biblioteca de gráficos não carregada');
+        return;
+    }
+    
+    // Verificar canvas
+    const canvas = document.getElementById('chart-evolucao');
+    if (!canvas) {
+        console.error('renderEvolucaoChart: Canvas chart-evolucao não encontrado');
+        return;
+    }
+    
+    try {
     const data = await api.getEvolucao();
     
     if (!data || !data.dados || data.dados.length === 0) {
@@ -450,6 +592,10 @@ async function renderEvolucaoChart() {
             }
         }
     });
+    } catch (error) {
+        console.error('renderEvolucaoChart: Erro ao renderizar:', error);
+        showChartError('chart-evolucao', 'Erro ao carregar gráfico');
+    }
 }
 
 // Gráfico de Tempo Médio
@@ -563,9 +709,14 @@ async function renderSLAAreaChart() {
             }
             
             // Cores dinâmicas: vermelho/laranja para acima da meta, verde/azul para abaixo/igual
+            // IMPORTANTE: Se media_dias <= 5, sempre verde (dentro do SLA, sem atraso)
             // Usar acima_da_meta do backend se disponível, senão comparar com benchmarkDias
             const cores = slaData.dados.map((item, index) => {
                 const dias = diasTramitacao[index];
+                // Se dias <= 5, sempre verde (dentro do SLA, sem atraso)
+                if (dias <= 5) {
+                    return 'rgba(34, 197, 94, 0.8)'; // Verde - dentro do SLA
+                }
                 const acimaDaMeta = item.acima_da_meta !== undefined ? item.acima_da_meta : (dias > benchmarkDias);
                 return acimaDaMeta 
                     ? 'rgba(220, 38, 38, 0.8)' // Vermelho para acima do benchmark
@@ -573,6 +724,10 @@ async function renderSLAAreaChart() {
             });
             const coresBorda = slaData.dados.map((item, index) => {
                 const dias = diasTramitacao[index];
+                // Se dias <= 5, sempre verde (dentro do SLA, sem atraso)
+                if (dias <= 5) {
+                    return 'rgb(34, 197, 94)'; // Verde - dentro do SLA
+                }
                 const acimaDaMeta = item.acima_da_meta !== undefined ? item.acima_da_meta : (dias > benchmarkDias);
                 return acimaDaMeta 
                     ? 'rgb(220, 38, 38)' 
@@ -1001,23 +1156,7 @@ async function renderSolicitacoesPrazoAreaChart() {
             }
         } else {
             console.warn('renderSolicitacoesPrazoAreaChart: Nenhum dado disponível');
-            if (canvasEl) {
-                try {
-                    const ctx = canvasEl.getContext('2d');
-                    const width = canvasEl.width || canvasEl.clientWidth || 300;
-                    const height = canvasEl.height || canvasEl.clientHeight || 300;
-                    ctx.clearRect(0, 0, width, height);
-                    ctx.fillStyle = '#ed8936';
-                    ctx.font = 'bold 16px Arial';
-                    ctx.textAlign = 'center';
-                    ctx.fillText('Nenhum dado disponível', width / 2, height / 2 - 10);
-                    ctx.fillStyle = '#fff';
-                    ctx.font = '12px Arial';
-                    ctx.fillText('Verifique se o backend está retornando dados', width / 2, height / 2 + 10);
-                } catch (e) {
-                    console.error('renderSolicitacoesPrazoAreaChart: Erro ao desenhar mensagem:', e);
-                }
-            }
+            showChartError('chart-solicitacoes-prazo-area', 'Sem dados para esta seleção');
         }
         
         if (DEBUG_MODE) console.log('renderSolicitacoesPrazoAreaChart: ===== RENDERIZAÇÃO CONCLUÍDA =====');
@@ -1026,21 +1165,8 @@ async function renderSolicitacoesPrazoAreaChart() {
         console.error('renderSolicitacoesPrazoAreaChart: Erro completo:', error);
         console.error('renderSolicitacoesPrazoAreaChart: Stack:', error.stack);
         
-        // Mostrar erro visual
-        const canvasEl = document.getElementById('chart-solicitacoes-prazo-area');
-        if (canvasEl) {
-            try {
-                const ctx = canvasEl.getContext('2d');
-                ctx.fillStyle = '#f56565';
-                ctx.font = 'bold 16px Arial';
-                ctx.fillText('Erro ao renderizar gráfico', 10, 50);
-                ctx.fillStyle = '#fff';
-                ctx.font = '12px Arial';
-                ctx.fillText(error.message || 'Erro desconhecido', 10, 70);
-            } catch (e) {
-                console.error('renderSolicitacoesPrazoAreaChart: Erro ao mostrar mensagem de erro:', e);
-            }
-        }
+        // Mostrar erro visual usando função utilitária
+        showChartError('chart-solicitacoes-prazo-area', 'Erro ao carregar gráfico');
     }
 }
 
@@ -1457,22 +1583,9 @@ async function renderDistribuicaoUFChart() {
                 return;
             }
             
-            // Gerar cores usando escala azul/roxo corporativa
-            const colors = [];
-            const baseColors = [
-                'rgba(49, 130, 206, 0.8)',   // Azul
-                'rgba(102, 126, 234, 0.8)',  // Roxo-azul
-                'rgba(139, 92, 246, 0.8)',   // Roxo
-                'rgba(79, 70, 229, 0.8)',    // Índigo
-                'rgba(99, 102, 241, 0.8)',    // Azul-índigo
-                'rgba(59, 130, 246, 0.8)',   // Azul claro
-                'rgba(147, 51, 234, 0.8)',   // Roxo escuro
-                'rgba(88, 80, 236, 0.8)'     // Índigo escuro
-            ];
-            
-            ufs.forEach((_, index) => {
-                colors.push(baseColors[index % baseColors.length]);
-            });
+            // Usar sistema global de cores para garantir consistência
+            const colors = ufs.map(uf => getColor(uf, 'uf', 0.8));
+            const borderColors = ufs.map(uf => getBorderColor(uf, 'uf'));
             
             // Plugin customizado para mostrar total no centro
             const totalPlugin = {
@@ -2312,20 +2425,20 @@ async function renderTiposAcoesChart() {
 // Gráfico Erro Sistêmico
 async function renderErroSistemicoChart() {
     try {
-        const data = await api.getErroSistemico();
+    const data = await api.getErroSistemico();
         
         if (!data || !data.dados || data.dados.length === 0) {
             console.warn('renderErroSistemicoChart: dados vazios');
             return;
         }
-        
+    
         await createChartWithRetry('chart-erro-sistemico', {
-            type: 'bar',
-            data: {
-                labels: data.dados.map(d => d.objeto),
-                datasets: [{
-                    label: 'Quantidade de Erros',
-                    data: data.dados.map(d => d.quantidade),
+        type: 'bar',
+        data: {
+            labels: data.dados.map(d => d.objeto),
+            datasets: [{
+                label: 'Quantidade de Erros',
+                data: data.dados.map(d => d.quantidade),
                 backgroundColor: 'rgba(245, 101, 101, 0.8)',
                 borderColor: 'rgb(245, 101, 101)',
                 borderWidth: 2
@@ -2360,38 +2473,38 @@ async function renderPrejuizoErroCriticoChart() {
         const labels = data.dados.map((d, i) => 
             `${d.objeto}\n${valores[i].toFixed(2)} Mil (${percentuais[i]}%)`
         );
-        
+    
         await createChartWithRetry('chart-prejuizo-erro-critico', {
-            type: 'doughnut',
-            data: {
+        type: 'doughnut',
+        data: {
                 labels: labels,
-                datasets: [{
-                    data: valores,
-                    backgroundColor: [
-                        'rgba(245, 101, 101, 0.8)',
-                        'rgba(237, 137, 54, 0.8)',
-                        'rgba(251, 191, 36, 0.8)',
-                        'rgba(49, 130, 206, 0.8)',
+            datasets: [{
+                data: valores,
+                backgroundColor: [
+                    'rgba(245, 101, 101, 0.8)',
+                    'rgba(237, 137, 54, 0.8)',
+                    'rgba(251, 191, 36, 0.8)',
+                    'rgba(49, 130, 206, 0.8)',
                         'rgba(72, 187, 120, 0.8)',
                         'rgba(139, 92, 246, 0.8)',
                         'rgba(236, 72, 153, 0.8)'
-                    ],
-                    borderColor: [
-                        'rgb(245, 101, 101)',
-                        'rgb(237, 137, 54)',
-                        'rgb(251, 191, 36)',
-                        'rgb(49, 130, 206)',
+                ],
+                borderColor: [
+                    'rgb(245, 101, 101)',
+                    'rgb(237, 137, 54)',
+                    'rgb(251, 191, 36)',
+                    'rgb(49, 130, 206)',
                         'rgb(72, 187, 120)',
                         'rgb(139, 92, 246)',
                         'rgb(236, 72, 153)'
-                    ],
-                    borderWidth: 2
-                }]
-            },
-            options: {
-                ...defaultOptions,
-                plugins: {
-                    ...defaultOptions.plugins,
+                ],
+                borderWidth: 2
+            }]
+        },
+        options: {
+            ...defaultOptions,
+            plugins: {
+                ...defaultOptions.plugins,
                     title: {
                         display: true,
                         text: `Erro Sistêmico - Valor Pretendido Total: ${formatCurrency(data.total_valor_pretendido || data.total_impacto || 0)}`,
@@ -2400,8 +2513,8 @@ async function renderPrejuizoErroCriticoChart() {
                             weight: 'bold'
                         }
                     },
-                    legend: {
-                        position: 'right'
+                legend: {
+                    position: 'right'
                     },
                     tooltip: {
                         callbacks: {
@@ -2411,10 +2524,10 @@ async function renderPrejuizoErroCriticoChart() {
                                 return `${label}: ${formatCurrency(value * 1000)}`;
                             }
                         }
-                    }
                 }
             }
-        });
+        }
+    });
     } catch (error) {
         console.error('renderPrejuizoErroCriticoChart: Erro ao renderizar:', error);
     }
@@ -2553,6 +2666,31 @@ function updateSlideImpactoFiltro(objeto) {
     }
 }
 
+/**
+ * Atualiza o dashboard inteiro baseado em filtro de UF
+ * Usa Chart.js .update() para evitar destruir e recriar gráficos
+ * @param {string|null} uf - Sigla da UF ou null para remover filtro
+ */
+async function updateDashboardByUF(uf) {
+    try {
+        // Atualizar estado global
+        if (typeof DashboardState !== 'undefined') {
+            DashboardState.setFilter('uf', uf);
+        }
+        
+        // Atualizar gráfico de distribuição por UF
+        await updateDistribuicaoUFPorEstado(uf);
+        
+        // Outros gráficos serão atualizados via listeners do DashboardState
+        
+    } catch (error) {
+        console.error('Erro ao atualizar dashboard por UF:', error);
+    }
+}
+
+// Tornar disponível globalmente
+window.updateDashboardByUF = updateDashboardByUF;
+
 // Função para atualizar gráfico de distribuição por UF com filtro de estado
 async function updateDistribuicaoUFPorEstado(uf) {
     console.log('updateDistribuicaoUFPorEstado: Atualizando gráfico para UF:', uf);
@@ -2565,27 +2703,17 @@ async function updateDistribuicaoUFPorEstado(uf) {
             return;
         }
         
-        // Buscar dados filtrados por estado
+        // Buscar dados filtrados por estado usando API com parâmetro uf
         let data;
         if (uf) {
-            // Buscar dados filtrados por estado
-            data = await api.getAnaliseCorrelacao(null);
-            // Filtrar dados para mostrar apenas o estado selecionado
-            if (data && data.distribuicao_uf) {
-                const distribuicaoFiltrada = data.distribuicao_uf.filter(d => d.uf === uf);
-                if (distribuicaoFiltrada.length > 0) {
-                    data.distribuicao_uf = distribuicaoFiltrada;
-                } else {
-                    // Se não encontrou dados filtrados, usar dados originais mas destacar o estado
-                    data.distribuicao_uf = dadosDistribuicaoUFOriginais || data.distribuicao_uf;
-                }
-            }
+            // Buscar dados filtrados por estado diretamente da API
+            data = await api.getAnaliseCorrelacao(null, uf);
         } else {
             // Sem filtro, usar dados originais
             if (dadosDistribuicaoUFOriginais) {
                 data = { distribuicao_uf: dadosDistribuicaoUFOriginais };
             } else {
-                data = await api.getAnaliseCorrelacao(null);
+                data = await api.getAnaliseCorrelacao(null, null);
                 dadosDistribuicaoUFOriginais = data.distribuicao_uf;
             }
         }
@@ -2604,50 +2732,21 @@ async function updateDistribuicaoUFPorEstado(uf) {
                 return totalCasos > 0 ? (qtd / totalCasos * 100) : 0;
             });
             
-            // Gerar paleta de cores harmoniosa
-            const generateColorPalette = (numEstados) => {
-                const colors = [];
-                const blueBase = [
-                    'rgba(37, 99, 235, 0.85)',   // Azul principal
-                    'rgba(59, 130, 246, 0.85)',  // Azul médio
-                    'rgba(96, 165, 250, 0.85)',  // Azul claro
-                    'rgba(29, 78, 216, 0.85)',   // Azul escuro
-                    'rgba(30, 64, 175, 0.85)',   // Azul mais escuro
-                    'rgba(147, 197, 253, 0.85)', // Azul muito claro
-                ];
-                const accentColors = [
-                    'rgba(249, 115, 22, 0.85)',  // Laranja
-                    'rgba(251, 146, 60, 0.85)',  // Laranja claro
-                    'rgba(234, 88, 12, 0.85)',   // Laranja escuro
-                    'rgba(253, 186, 116, 0.85)', // Laranja muito claro
-                ];
-                for (let i = 0; i < numEstados; i++) {
-                    if (i < blueBase.length) {
-                        colors.push(blueBase[i]);
-                    } else {
-                        const accentIndex = (i - blueBase.length) % accentColors.length;
-                        colors.push(accentColors[accentIndex]);
-                    }
-                }
-                return colors;
-            };
-            
-            const baseColors = generateColorPalette(estados.length);
-            
-            const colors = estados.map((estado, index) => {
+            // Usar sistema global de cores para garantir consistência
+            const colors = estados.map((estado) => {
                 // Se há filtro e este é o estado selecionado, destacar
                 if (uf && estado === uf) {
-                    return 'rgba(49, 130, 206, 1.0)'; // Azul mais opaco
+                    return getColor(estado, 'uf', 1.0); // Mais opaco para destacar
                 }
-                return baseColors[index % baseColors.length];
+                return getColor(estado, 'uf', 0.85);
             });
             
-            const borderColors = estados.map((estado, index) => {
+            const borderColors = estados.map((estado) => {
                 // Se há filtro e este é o estado selecionado, destacar com borda mais grossa
                 if (uf && estado === uf) {
-                    return '#1e3a5f'; // Borda escura
+                    return getBorderColor(estado, 'uf');
                 }
-                return colors[index].replace('0.8', '1');
+                return getBorderColor(estado, 'uf');
             });
             
             const borderWidths = estados.map((estado) => {
@@ -2677,12 +2776,12 @@ async function updateDistribuicaoUFPorEstado(uf) {
                     return `Estado: ${context[0].label}`;
                 },
                 label: function(context) {
-                    const index = context.dataIndex;
-                    const ufLabel = estadosRef[index];
-                    const percentual = percentuaisRef[index];
-                    const quantidade = quantidadesRef[index];
-                    const prejuizoTotalMil = prejuizosTotalMilRef[index];
-                    return [
+                const index = context.dataIndex;
+                const ufLabel = estadosRef[index];
+                const percentual = percentuaisRef[index];
+                const quantidade = quantidadesRef[index];
+                const prejuizoTotalMil = prejuizosTotalMilRef[index];
+                return [
                         `Quantidade: ${formatNumber(quantidade)} casos`,
                         `Percentual: ${percentual.toFixed(2)}%`,
                         `Erro Sistêmico: ${formatCurrencyMil(prejuizoTotalMil * 1000)}`
@@ -2741,12 +2840,12 @@ async function updateDistribuicaoUFPorEstado(uf) {
                         const percentual = percentuaisRef[index];
                         
                         ctx.font = 'bold 18px Arial';
-                        ctx.textAlign = 'center';
-                        ctx.textBaseline = 'middle';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
                         ctx.fillStyle = '#1e40af';
                         ctx.fillText(uf, centerX, centerY - 30);
-                        
-                        ctx.font = '14px Arial';
+                
+                    ctx.font = '14px Arial';
                         ctx.fillStyle = '#333';
                         ctx.fillText(`${formatNumber(quantidade)} casos`, centerX, centerY - 10);
                         ctx.fillText(`${percentual.toFixed(1)}%`, centerX, centerY + 10);
@@ -2796,11 +2895,108 @@ async function updateDistribuicaoUFPorEstado(uf) {
     }
 }
 
-async function renderSlideImpacto(filtro = null, estadoFiltro = null) {
+/**
+ * Destaca a fatia do gráfico de rosca correspondente ao UF selecionado
+ * @param {string} uf - Sigla do estado (ex: 'SP', 'PA')
+ */
+function highlightSliceInRoscChart(uf) {
+    if (!chartImpactoRoscInstance || !uf) {
+        console.warn('highlightSliceInRoscChart: Gráfico ou UF não disponível');
+        return;
+    }
+    
     try {
-        console.log('renderSlideImpacto: Iniciando renderização, filtro:', filtro);
+        const dataset = chartImpactoRoscInstance.data.datasets[0];
+        const labels = chartImpactoRoscInstance.data.labels || [];
+        
+        // Encontrar índice do UF no gráfico
+        const ufIndex = labels.findIndex(label => label === uf);
+        
+        if (ufIndex === -1) {
+            console.warn(`highlightSliceInRoscChart: UF ${uf} não encontrado no gráfico`);
+            return;
+        }
+        
+        // Salvar cores originais se ainda não foram salvas
+        if (!dataset.originalColors) {
+            dataset.originalColors = [...dataset.backgroundColor];
+            dataset.originalBorderColors = [...dataset.borderColor];
+            dataset.originalBorderWidths = Array.isArray(dataset.borderWidth) 
+                ? [...dataset.borderWidth] 
+                : Array(labels.length).fill(dataset.borderWidth || 1);
+        }
+        
+        // Criar novas cores: destacar o UF selecionado, escurecer os outros
+        const newColors = dataset.originalColors.map((color, index) => {
+            if (index === ufIndex) {
+                // Destacar: aumentar opacidade e usar cor mais vibrante
+                return getColor(uf, 'uf', 1.0);
+            } else {
+                // Escurecer outros: reduzir opacidade
+                return getColor(labels[index], 'uf', 0.3);
+            }
+        });
+        
+        const newBorderColors = dataset.originalBorderColors.map((color, index) => {
+            if (index === ufIndex) {
+                return getBorderColor(uf, 'uf');
+            } else {
+                return getColor(labels[index], 'uf', 0.3);
+            }
+        });
+        
+        const newBorderWidths = dataset.originalBorderWidths.map((width, index) => {
+            if (index === ufIndex) {
+                return 4; // Borda mais grossa para destacar
+            } else {
+                return 1;
+            }
+        });
+        
+        // Aplicar novas cores
+        dataset.backgroundColor = newColors;
+        dataset.borderColor = newBorderColors;
+        dataset.borderWidth = newBorderWidths;
+        
+        // Atualizar gráfico
+        chartImpactoRoscInstance.update('active');
+        
+        console.log(`highlightSliceInRoscChart: Fatia do UF ${uf} destacada com sucesso`);
+    } catch (error) {
+        console.error('highlightSliceInRoscChart: Erro ao destacar fatia:', error);
+    }
+}
+
+async function renderSlideImpacto(filtro = null, estadoFiltro = null) {
+    console.log('renderSlideImpacto: Iniciando renderização', { filtro, estadoFiltro });
+    
+    // Verificar Chart.js
+    if (typeof Chart === 'undefined') {
+        console.error('renderSlideImpacto: Chart.js não está disponível');
+        showChartError('chart-impacto-rosca', 'Biblioteca de gráficos não carregada');
+        showChartError('chart-impacto-base', 'Biblioteca de gráficos não carregada');
+        return;
+    }
+    
+    // Verificar elementos canvas
+    const canvasRosc = document.getElementById('chart-impacto-rosca');
+    const canvasBase = document.getElementById('chart-impacto-base');
+    
+    if (!canvasRosc) {
+        console.error('renderSlideImpacto: Canvas chart-impacto-rosca não encontrado');
+    }
+    if (!canvasBase) {
+        console.error('renderSlideImpacto: Canvas chart-impacto-base não encontrado');
+    }
+    
+    if (!canvasRosc && !canvasBase) {
+        console.error('renderSlideImpacto: Nenhum canvas encontrado');
+        return;
+    }
+    
+    try {
         console.log('renderSlideImpacto: api disponível?', typeof api !== 'undefined');
-        console.log('renderSlideImpacto: getAnaliseCorrelacao disponível?', typeof api.getAnaliseCorrelacao === 'function');
+        console.log('renderSlideImpacto: getAnaliseCorrelacao disponível?', typeof api?.getAnaliseCorrelacao === 'function');
         
         // Buscar dados com filtro de objeto e estado
         let data;
@@ -2887,23 +3083,21 @@ async function renderSlideImpacto(filtro = null, estadoFiltro = null) {
                 return colors;
             };
             
-            // Gerar cores usando paleta harmoniosa
-            const baseColors = generateColorPalette(estados.length);
-            
-            const colors = estados.map((estado, index) => {
+            // Usar sistema global de cores para garantir consistência visual
+            const colors = estados.map((estado) => {
                 // Se há filtro de estado e este é o estado selecionado, destacar
                 if (estadoFiltro && estado === estadoFiltro) {
-                    return baseColors[index].replace('0.85', '1.0'); // Mais opaco
+                    return getColor(estado, 'uf', 1.0); // Mais opaco para destacar
                 }
-                return baseColors[index];
+                return getColor(estado, 'uf', 0.85);
             });
             
-            const borderColors = estados.map((estado, index) => {
+            const borderColors = estados.map((estado) => {
                 // Se há filtro de estado e este é o estado selecionado, destacar com borda mais grossa
                 if (estadoFiltro && estado === estadoFiltro) {
-                    return '#1e3a5f'; // Borda escura
+                    return getBorderColor(estado, 'uf');
                 }
-                return colors[index].replace('0.8', '1');
+                return getBorderColor(estado, 'uf');
             });
             
             const borderWidths = estados.map((estado) => {
@@ -3060,10 +3254,10 @@ async function renderSlideImpacto(filtro = null, estadoFiltro = null) {
                             } else {
                                 // Mostrar total geral
                                 const totalCasos = quantidadesRef.reduce((a, b) => a + b, 0);
-                                ctx.font = 'bold 16px Arial';
-                                ctx.textAlign = 'center';
-                                ctx.textBaseline = 'middle';
-                                ctx.fillStyle = '#333';
+                            ctx.font = 'bold 16px Arial';
+                            ctx.textAlign = 'center';
+                            ctx.textBaseline = 'middle';
+                            ctx.fillStyle = '#333';
                                 ctx.fillText('Total de Casos', centerX, centerY - 10);
                                 ctx.font = '14px Arial';
                                 ctx.fillText(formatNumber(totalCasos), centerX, centerY + 10);
@@ -3148,6 +3342,10 @@ async function renderSlideImpacto(filtro = null, estadoFiltro = null) {
                 sampleMedias: mediasValid.slice(0, 5)
             });
             
+            // Usar sistema global de cores para barras (cores por UF)
+            const barColors = labelsValid.map(uf => getColor(uf, 'uf', 0.8));
+            const barBorderColors = labelsValid.map(uf => getBorderColor(uf, 'uf'));
+            
             const chartBase = createChart('chart-impacto-base', {
                 type: 'bar',
                 data: {
@@ -3156,8 +3354,8 @@ async function renderSlideImpacto(filtro = null, estadoFiltro = null) {
                         {
                             label: 'Quantidade de Casos',
                             data: quantidadesValid, // Quantidade de casos por UF
-                            backgroundColor: 'rgba(49, 130, 206, 0.8)', // Azul
-                            borderColor: 'rgb(49, 130, 206)',
+                            backgroundColor: barColors, // Cores consistentes por UF
+                            borderColor: barBorderColors,
                             borderWidth: 2,
                             yAxisID: 'y',
                             order: 2 // Atrás da linha
@@ -3166,14 +3364,14 @@ async function renderSlideImpacto(filtro = null, estadoFiltro = null) {
                             label: 'Média de Prejuízo (R$ Mil)',
                             data: mediasValid, // Média de prejuízo por UF
                             type: 'line',
-                            borderColor: 'rgb(237, 137, 54)', // Laranja
-                            backgroundColor: 'rgba(237, 137, 54, 0.1)',
+                            borderColor: CONST_COLORS.semantic.negativo, // Vermelho para prejuízo
+                            backgroundColor: hexToRgba(CONST_COLORS.semantic.negativo, 0.1),
                             tension: 0.4,
                             fill: false,
                             yAxisID: 'y1',
                             pointRadius: 5,
                             pointHoverRadius: 7,
-                            pointBackgroundColor: 'rgb(237, 137, 54)',
+                            pointBackgroundColor: CONST_COLORS.semantic.negativo,
                             pointBorderColor: '#fff',
                             pointBorderWidth: 2,
                             order: 1 // À frente das barras
@@ -3301,25 +3499,9 @@ async function renderSlideImpacto(filtro = null, estadoFiltro = null) {
         console.log('renderSlideImpacto: Renderização concluída');
     } catch (error) {
         console.error('renderSlideImpacto: Erro ao renderizar:', error);
-        // Mostrar mensagem de erro visual
-        const canvasRosc = document.getElementById('chart-impacto-rosca');
-        const canvasBase = document.getElementById('chart-impacto-base');
-        if (canvasRosc) {
-            const ctx = canvasRosc.getContext('2d');
-            ctx.clearRect(0, 0, canvasRosc.width, canvasRosc.height);
-            ctx.fillStyle = '#666';
-            ctx.font = '14px Arial';
-            ctx.textAlign = 'center';
-            ctx.fillText('Erro ao carregar dados', canvasRosc.width / 2, canvasRosc.height / 2);
-        }
-        if (canvasBase) {
-            const ctx = canvasBase.getContext('2d');
-            ctx.clearRect(0, 0, canvasBase.width, canvasBase.height);
-            ctx.fillStyle = '#666';
-            ctx.font = '14px Arial';
-            ctx.textAlign = 'center';
-            ctx.fillText('Erro ao carregar dados', canvasBase.width / 2, canvasBase.height / 2);
-        }
+        console.error('renderSlideImpacto: Stack:', error.stack);
+        showChartError('chart-impacto-rosca', 'Erro ao carregar gráfico');
+        showChartError('chart-impacto-base', 'Erro ao carregar gráfico');
     }
 }
 
@@ -3354,9 +3536,9 @@ function showChartError(canvasId, message) {
     }
     
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = '#666';
-    ctx.font = '14px Arial';
-    ctx.textAlign = 'center';
+            ctx.fillStyle = '#666';
+            ctx.font = '14px Arial';
+            ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(message, canvas.width / 2, canvas.height / 2);
     ctx.fillText('Verifique o console para mais detalhes', canvas.width / 2, canvas.height / 2 + 20);
@@ -3691,10 +3873,14 @@ window.chartFunctions = {
     renderAcoesGanhasPerdidasChart,
     renderAcordoAntesSentencaChart,
     updateDistribuicaoUFPorEstado,
+    updateDashboardByUF,
     clearAllCharts,
     createChart,
     createChartWithRetry,
     waitForElementVisible,
-    isElementVisible
+    isElementVisible,
+    showChartError,
+    getColor,
+    getBorderColor
 };
 window.updateSlideImpactoFiltro = updateSlideImpactoFiltro;

@@ -38,13 +38,15 @@ async function renderMapaBrasil() {
             const int = maxImpacto > 0 ? impactoMil / maxImpacto : 0;
             const radius = Math.max(8, Math.min(40, 8 + (int * 32)));
             
-            const colors = ['#3182ce', '#667eea'];
-            const colorIndex = estados.indexOf(state) % colors.length;
-            const color = colors[colorIndex];
+            // Usar sistema global de cores para consistência com gráficos
+            // CONST_COLORS está definido em charts.js e deve estar disponível globalmente
+            const colorHex = (typeof CONST_COLORS !== 'undefined' && CONST_COLORS.uf && CONST_COLORS.uf[state.estado]) 
+                ? CONST_COLORS.uf[state.estado] 
+                : '#3182ce'; // Fallback
             
             const circle = L.circleMarker(co, {
                 radius: radius,
-                fillColor: color,
+                fillColor: colorHex,
                 color: '#1e3a5f',
                 weight: 2,
                 opacity: 0.8,
@@ -52,7 +54,7 @@ async function renderMapaBrasil() {
             }).addTo(mapInstance);
             
             circle.originalColor = '#1e3a5f';
-            circle.originalFillColor = color;
+            circle.originalFillColor = colorHex;
             stateCircles[state.estado] = circle;
             
             circle.bindPopup(`
@@ -64,11 +66,21 @@ async function renderMapaBrasil() {
             `);
             
             circle.on('click', function() {
-                const currentFilters = api.getFilters();
-                if (currentFilters.uf === state.estado) {
-                    api.updateFilters({ uf: null });
+                // Usar DashboardState e updateDashboardByUF para cross-filtering
+                const currentUF = (typeof DashboardState !== 'undefined') 
+                    ? DashboardState.getFilters().uf 
+                    : null;
+                
+                const newUF = (currentUF === state.estado) ? null : state.estado;
+                
+                // Atualizar dashboard via função global
+                if (typeof updateDashboardByUF === 'function') {
+                    updateDashboardByUF(newUF);
                 } else {
-                    api.updateFilters({ uf: state.estado });
+                    // Fallback: usar DashboardState diretamente
+                    if (typeof DashboardState !== 'undefined') {
+                        DashboardState.setFilter('uf', newUF);
+                    }
                 }
             });
         });
@@ -80,8 +92,10 @@ async function renderMapaBrasil() {
 }
 
 function updateMapVisualization() {
-    const currentFilters = api.getFilters();
-    const activeUF = currentFilters.uf;
+    // Usar DashboardState em vez de api.getFilters()
+    const activeUF = (typeof DashboardState !== 'undefined') 
+        ? DashboardState.getFilters().uf 
+        : null;
 
     Object.keys(stateCircles).forEach(uf => {
         const circle = stateCircles[uf];
@@ -114,8 +128,11 @@ function updateMapVisualization() {
 }
 
 function updateDashboardFilter(estado) {
-    if (window.api) {
-        window.api.updateFilters({ uf: estado });
+    // Usar updateDashboardByUF em vez de api.updateFilters
+    if (typeof updateDashboardByUF === 'function') {
+        updateDashboardByUF(estado);
+    } else if (typeof DashboardState !== 'undefined') {
+        DashboardState.setFilter('uf', estado);
     }
 }
 
@@ -346,8 +363,10 @@ function resetarFiltroEstadoAnaliseImpacto() {
         }
     });
     
-    // Atualizar gráfico para mostrar todos os estados
-    if (window.chartFunctions && window.chartFunctions.updateDistribuicaoUFPorEstado) {
+    // Atualizar dashboard para mostrar todos os estados
+    if (typeof updateDashboardByUF === 'function') {
+        updateDashboardByUF(null);
+    } else if (window.chartFunctions && window.chartFunctions.updateDistribuicaoUFPorEstado) {
         window.chartFunctions.updateDistribuicaoUFPorEstado(null);
     }
 }

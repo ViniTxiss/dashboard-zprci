@@ -286,14 +286,20 @@ async def kpis_finais(estado: Optional[str] = Query(None, description="Filtrar p
 
 @router.get("/analise-correlacao")
 async def analise_correlacao(
-    estado: Optional[str] = Query(None, description="Filtrar por estado (ex: PA, SP)"),
+    estado: Optional[str] = Query(None, description="Filtrar por estado (ex: PA, SP) - compatibilidade"),
+    uf: Optional[str] = Query(None, description="Filtrar por UF (ex: PA, SP) - preferido"),
     filtro_objeto: Optional[str] = Query(None, description="Filtrar por objeto da ação (cross-filter)")
 ):
     """Dados para o slide Análise de Impacto: mapa, objeto, tempo médio e base (bar+line)."""
     try:
         loader = get_loader()
         df = loader.get_dataframe()
-        df = _filter_by_state(df, estado)
+        
+        # Usar uf se fornecido, senão usar estado (compatibilidade)
+        filtro_uf = uf or estado
+        if filtro_uf:
+            df = apply_global_filters(df, uf=filtro_uf)
+        
         return get_analise_correlacao(df, filtro_objeto)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

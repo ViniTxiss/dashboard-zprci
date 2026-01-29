@@ -100,6 +100,20 @@ class AnimationController {
                     // mas não animar ainda
                     this.animatedElements.add(element);
                 }
+            } else if (!element.classList.contains('animate-in')) {
+                // Se já está no set mas não tem animate-in, forçar
+                this.animateElement(element);
+                animated++;
+            }
+        });
+        
+        // Garantir que elementos de gráficos sejam visíveis mesmo sem animação
+        const chartContainers = document.querySelectorAll('.chart-container, .map-container');
+        chartContainers.forEach(container => {
+            if (this.isElementVisible(container) && !container.classList.contains('animate-in')) {
+                container.classList.add('animate-in');
+                container.style.opacity = '1';
+                container.style.visibility = 'visible';
             }
         });
         

@@ -72,9 +72,9 @@ Todas as rotas do frontend estão corretamente mapeadas no backend.
 - Backend filtra corretamente usando `_filter_by_state()`
 
 ### ✅ Arquivo de Dados
-- ✅ Alterado de `BASEGERAL_ATUALIZADA.xlsx` para `BASE_TRATADA_FINAL.xlsx`
-- ✅ Arquivo existe em `backend/data/BASE_TRATADA_FINAL.xlsx`
-- ✅ DataLoader configurado para usar o novo arquivo
+- ✅ Sistema utiliza `DADOS_NOVOS_CASOS.xlsx` gerado a partir dos PDFs oficiais
+- ✅ Arquivo deve estar em `backend/data/DADOS_NOVOS_CASOS.xlsx`
+- ✅ DataLoader configurado para usar o arquivo padrão
 
 ---
 

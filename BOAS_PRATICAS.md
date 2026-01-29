@@ -8,7 +8,7 @@
 
 - **Backend:** FastAPI, Python 3.x, Pandas. Servido via uvicorn na porta **8001** (ou 8002–8010 em fallback).
 - **Frontend:** HTML, CSS e JavaScript vanilla. Sem framework; `api.js` centraliza chamadas à API.
-- **Dados:** única fonte — `backend/data/BASEGERAL_ATUALIZADA.xlsx` (prioridade) ou `BASEGERAL_ATUALIZADA.csv` (sep=`;`, decimal=`,`). Sem fallbacks para outros Excels ou mock.
+- **Dados:** única fonte — `backend/data/DADOS_NOVOS_CASOS.xlsx`. O sistema utiliza DADOS_NOVOS_CASOS.xlsx gerado a partir dos PDFs oficiais. Sem fallbacks para outros Excels ou mock.
 
 ---
 
@@ -57,8 +57,7 @@ frontend/
 
 #### `data_loader.py`
 
-- **Ordem de carga:** 1) `BASEGERAL_ATUALIZADA.xlsx` em `backend/data/`; 2) `BASEGERAL_ATUALIZADA.csv`. Se nenhum existir ou ocorrer erro na leitura, usa-se DataFrame vazio (colunas mínimas); o app continua e as APIs retornam listas vazias.
-- **CSV:** `sep=';'`, `decimal=','`, `encoding='utf-8'`.
+- **Ordem de carga:** `DADOS_NOVOS_CASOS.xlsx` em `backend/data/`. Se não existir ou ocorrer erro na leitura, usa-se DataFrame vazio (colunas mínimas); o app continua e as APIs retornam listas vazias.
 - **`_map_columns`:** mapear colunas do arquivo para nomes internos (`objeto_acao`, `data_entrada`, `data_encerramento`, `status`, `estado`, etc.). Manter `column_mapping` centralizado; se a planilha mudar, ajustar só aqui.
 - **Status:** normalizar para `Em Tramitação` e `Encerrado`; `ENTRADA`/`EM ANDAMENTO` → `Em Tramitação`.
 - **`objeto_acao`:** preencher `NaN` com `'Não Informado'`.

@@ -271,13 +271,16 @@ class APIClient {
         return await this.get('/indicadores/acoes-ganhas-perdidas');
     }
 
-    async getAnaliseCorrelacao(filtroObjeto = null) {
-        // Os filtros globais (uf e objeto) já são incluídos automaticamente pelo método get()
-        // Mas ainda aceitamos filtroObjeto para compatibilidade
+    async getAnaliseCorrelacao(filtroObjeto = null, filtroUF = null) {
+        // Construir query params para filtros
         const params = new URLSearchParams();
-        if (filtroObjeto) {
-            params.append('filtro_objeto', filtroObjeto);
+        if (filtroObjeto && filtroObjeto.trim()) {
+            params.append('filtro_objeto', filtroObjeto.trim());
         }
+        if (filtroUF && filtroUF.trim()) {
+            params.append('uf', filtroUF.trim().toUpperCase());
+        }
+        
         const q = params.toString() ? `?${params.toString()}` : '';
         return await this.get(`/indicadores/analise-correlacao${q}`);
     }

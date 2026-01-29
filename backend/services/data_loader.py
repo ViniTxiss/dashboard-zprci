@@ -1,6 +1,7 @@
 """
 Serviço de Carregamento de Dados
-Única fonte: BASE_UNIFICADA (XLSX ou CSV em backend/data).
+Única fonte: DADOS_NOVOS_CASOS.xlsx em backend/data/.
+Este arquivo contém estritamente os dados dos PDFs recentes.
 """
 
 import pandas as pd
@@ -26,149 +27,81 @@ class DataLoader:
         backend_dir = Path(__file__).parent.parent
         base_dir = backend_dir.parent
 
-        # Novas fontes de dados atualizadas
-        # Prioridade: 1) Material Casos Críticos, 2) novos casos (mais recente)
-        # Buscar arquivos por padrão para evitar problemas de encoding
+        # Arquivo padrão: DADOS_NOVOS_CASOS.xlsx
+        # Este arquivo contém estritamente os dados dos PDFs recentes
         data_dir = backend_dir / "data"
+        self.default_file = "DADOS_NOVOS_CASOS.xlsx"
         
-        # Tentar baixar arquivos de storage externo (S3) se configurado
+        # Tentar baixar arquivo de storage externo (S3) se configurado
         # Isso permite manter arquivos sensíveis fora do repositório Git
         try:
             from backend.services.storage_loader import download_data_files_from_storage
             download_results = download_data_files_from_storage(data_dir)
-            if download_results.get('principal') or download_results.get('novos_casos'):
-                print("Arquivos baixados do storage externo com sucesso")
+            if download_results.get('dados_novos_casos'):
+                print("Arquivo baixado do storage externo com sucesso")
             elif download_results.get('errors'):
-                print(f"Avisos ao baixar arquivos: {download_results['errors']}")
+                print(f"Avisos ao baixar arquivo: {download_results['errors']}")
         except ImportError:
             # Storage loader não disponível (boto3 não instalado ou não configurado)
             pass
         except Exception as e:
-            print(f"Erro ao tentar baixar arquivos do storage externo: {e}")
+            print(f"Erro ao tentar baixar arquivo do storage externo: {e}")
         
-        self.xlsx_principal = None
-        self.xlsx_novos_casos = None
-        self.xlsx_secundario = None  # Mantido para compatibilidade
-        
-        # Buscar arquivo principal (Material Casos Críticos)
-        for file in data_dir.glob("*.xlsx"):
-            if "Material Casos" in file.name or "Base completa" in file.name:
-                if "Material" in file.name:
-                    self.xlsx_principal = file
-                    break
-        
-        # Buscar arquivo de novos casos (mais recente, tem prioridade nas colunas duplicadas)
-        for file in data_dir.glob("*.xlsx"):
-            if "novos casos" in file.name.lower():
-                self.xlsx_novos_casos = file
-                break
-        
-        # Buscar arquivo secundário (banco de dados para atualizar) - compatibilidade
-        for file in data_dir.glob("*.xlsx"):
-            if "banco de dados" in file.name.lower() or "atualizar" in file.name.lower():
-                self.xlsx_secundario = file
-                break
-        
-        self.csv_principal = None  # Não usar mais CSV antigo
+        # Buscar apenas o arquivo padrão DADOS_NOVOS_CASOS.xlsx
+        self.data_file = data_dir / self.default_file
 
         self._df = None
         self._load_data()
 
     def _load_data(self):
-        """Carrega dados das novas bases atualizadas: Material Casos Críticos e novos casos.
-        Mescla ambos arquivos quando disponíveis, priorizando 'novos casos' para colunas duplicadas."""
+        """Carrega dados do arquivo padrão DADOS_NOVOS_CASOS.xlsx.
+        Este arquivo contém estritamente os dados dos PDFs recentes."""
         # #region agent log
         try:
             with open(_DEBUG_LOG, "a", encoding="utf-8") as f:
-                f.write(json.dumps({"timestamp":int(time.time()*1000),"location":"data_loader._load_data","message":"entry","data":{"xlsx_principal_exists":self.xlsx_principal.exists() if self.xlsx_principal else False,"xlsx_novos_casos_exists":self.xlsx_novos_casos.exists() if self.xlsx_novos_casos else False},"sessionId":"debug-session","hypothesisId":"H1"}) + "\n")
+                f.write(json.dumps({"timestamp":int(time.time()*1000),"location":"data_loader._load_data","message":"entry","data":{"data_file_exists":self.data_file.exists() if self.data_file else False},"sessionId":"debug-session","hypothesisId":"H1"}) + "\n")
         except Exception: pass
         # #endregion
         
-        df_principal = pd.DataFrame()
-        df_novos = pd.DataFrame()
-        
         try:
-            # Carregar arquivo principal (Material Casos Críticos)
-            if self.xlsx_principal and self.xlsx_principal.exists():
+            # Carregar arquivo padrão DADOS_NOVOS_CASOS.xlsx
+            if self.data_file and self.data_file.exists():
                 try:
-                    print(f"Carregando dados de: {self.xlsx_principal.name}")
+                    print(f"Carregando dados de: {self.data_file.name}")
                 except UnicodeEncodeError:
-                    print("Carregando dados de: arquivo principal")
+                    print("Carregando dados de: DADOS_NOVOS_CASOS.xlsx")
                 try:
-                    xl = pd.ExcelFile(self.xlsx_principal)
-                    sheet = self._find_sheet(xl, ['in', 'dados', 'base'])
-                    if sheet:
-                        df_raw = pd.read_excel(self.xlsx_principal, sheet_name=sheet, engine='openpyxl')
-                        df_principal = self._map_columns(df_raw)
-                        print(f"Dados carregados do principal: {len(df_principal)} registros da sheet '{sheet}'")
-                        # #region agent log
-                        try:
-                            with open(_DEBUG_LOG, "a", encoding="utf-8") as f:
-                                f.write(json.dumps({"timestamp":int(time.time()*1000),"location":"data_loader._load_data","message":"loaded","data":{"source":"xlsx_principal","sheet":sheet,"nrows":len(df_principal)},"sessionId":"debug-session","hypothesisId":"H1"}) + "\n")
-                        except Exception: pass
-                        # #endregion
-                except Exception as e:
-                    print(f"Erro ao carregar arquivo principal: {e}")
-                    import traceback
-                    traceback.print_exc()
-            
-            # Carregar arquivo de novos casos
-            if self.xlsx_novos_casos and self.xlsx_novos_casos.exists():
-                try:
-                    print(f"Carregando dados de: {self.xlsx_novos_casos.name}")
-                except UnicodeEncodeError:
-                    print("Carregando dados de: novos casos")
-                try:
-                    xl = pd.ExcelFile(self.xlsx_novos_casos)
+                    xl = pd.ExcelFile(self.data_file)
                     sheet = self._find_sheet(xl, ['in', 'dados', 'base', 'CPJ'])
                     if sheet:
-                        df_raw = pd.read_excel(self.xlsx_novos_casos, sheet_name=sheet, engine='openpyxl')
-                        df_novos = self._map_columns(df_raw)
-                        print(f"Dados carregados dos novos casos: {len(df_novos)} registros da sheet '{sheet}'")
+                        df_raw = pd.read_excel(self.data_file, sheet_name=sheet, engine='openpyxl')
+                        self._df = self._map_columns(df_raw)
+                        print(f"Dados carregados: {len(self._df)} registros da sheet '{sheet}'")
                         # #region agent log
                         try:
                             with open(_DEBUG_LOG, "a", encoding="utf-8") as f:
-                                f.write(json.dumps({"timestamp":int(time.time()*1000),"location":"data_loader._load_data","message":"loaded","data":{"source":"xlsx_novos_casos","sheet":sheet,"nrows":len(df_novos)},"sessionId":"debug-session","hypothesisId":"H1"}) + "\n")
+                                f.write(json.dumps({"timestamp":int(time.time()*1000),"location":"data_loader._load_data","message":"loaded","data":{"source":"DADOS_NOVOS_CASOS.xlsx","sheet":sheet,"nrows":len(self._df)},"sessionId":"debug-session","hypothesisId":"H1"}) + "\n")
                         except Exception: pass
                         # #endregion
+                    else:
+                        print("AVISO: Nenhuma sheet apropriada encontrada no arquivo.")
+                        self._df = pd.DataFrame(columns=_COLUNAS_VAZIAS)
                 except Exception as e:
-                    print(f"Erro ao carregar arquivo de novos casos: {e}")
+                    print(f"Erro ao carregar arquivo DADOS_NOVOS_CASOS.xlsx: {e}")
                     import traceback
                     traceback.print_exc()
-            
-            # Mesclar DataFrames se ambos foram carregados, ou usar o disponível
-            if not df_principal.empty and not df_novos.empty:
-                print("Mesclando arquivos: Material Casos Críticos + novos casos")
-                self._df = self._merge_dataframes(df_principal, df_novos)
-            elif not df_principal.empty:
-                print("Usando apenas arquivo principal (Material Casos Críticos)")
-                self._df = df_principal.copy()
-            elif not df_novos.empty:
-                print("Usando apenas arquivo de novos casos")
-                self._df = df_novos.copy()
-            else:
-                # Fallback: tentar arquivo secundário (compatibilidade)
-                if self.xlsx_secundario and self.xlsx_secundario.exists():
-                    try:
-                        print(f"Carregando dados de: {self.xlsx_secundario.name}")
-                    except UnicodeEncodeError:
-                        print("Carregando dados de: arquivo secundario")
-                    try:
-                        xl = pd.ExcelFile(self.xlsx_secundario)
-                        sheet = self._find_sheet(xl, ['CPJ', 'dados', 'base'])
-                        if sheet:
-                            df_raw = pd.read_excel(self.xlsx_secundario, sheet_name=sheet, engine='openpyxl')
-                            self._df = self._map_columns(df_raw)
-                            print(f"Dados carregados: {len(self._df)} registros da sheet '{sheet}'")
-                    except Exception as e:
-                        print(f"Erro ao carregar arquivo secundário: {e}")
-                        self._df = pd.DataFrame(columns=_COLUNAS_VAZIAS)
-                else:
-                    print("AVISO: Nenhuma base de dados encontrada. Esperado:")
-                    print("  - backend/data/Material Casos Críticos - RCI - 2025 - Base completa.xlsx")
-                    print("  - backend/data/novos casos .xlsx")
-                    print("Usando DataFrame vazio.")
                     self._df = pd.DataFrame(columns=_COLUNAS_VAZIAS)
+            else:
+                print("AVISO: Arquivo de dados não encontrado. Esperado:")
+                print(f"  - backend/data/{self.default_file}")
+                print("O sistema utiliza DADOS_NOVOS_CASOS.xlsx gerado a partir dos PDFs oficiais.")
+                print("Usando DataFrame vazio.")
+                self._df = pd.DataFrame(columns=_COLUNAS_VAZIAS)
+            
+            # IMPORTANTE: Sempre chamar _calculate_derived_fields, mesmo com DataFrame vazio
+            # Isso garante que colunas críticas (critico, erro_sistemico, reincidencia) sempre existam
+            if self._df is not None:
+                self._df = self._calculate_derived_fields(self._df)
             
         except Exception as e:
             # #region agent log
@@ -181,6 +114,10 @@ class DataLoader:
             import traceback
             traceback.print_exc()
             self._df = pd.DataFrame(columns=_COLUNAS_VAZIAS)
+            # IMPORTANTE: Sempre chamar _calculate_derived_fields, mesmo em caso de erro
+            # Isso garante que colunas críticas (critico, erro_sistemico, reincidencia) sempre existam
+            if self._df is not None:
+                self._df = self._calculate_derived_fields(self._df)
     
     def _find_sheet(self, xl: pd.ExcelFile, prefer_keywords: list = None) -> str:
         """Encontra a sheet apropriada no arquivo Excel"""
@@ -382,8 +319,13 @@ class DataLoader:
         return status
     
     def _map_columns(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Mapeia colunas do CSV/Excel para o formato esperado pelo dashboard"""
-        mapped_df = pd.DataFrame()
+        """Mapeia colunas do CSV/Excel para o formato esperado pelo dashboard
+        
+        Método idempotente: se o arquivo já tem colunas mapeadas (ex: data_entrada),
+        mantém como está. Se tem alias antigos (ex: DATA ENTRADA), renomeia.
+        """
+        # Começar com cópia do DataFrame original (idempotente)
+        mapped_df = df.copy()
 
         # Mapeamento principal (nome_interno: coluna_origem)
         # Suporta tanto colunas antigas quanto novas dos arquivos atualizados
@@ -414,18 +356,35 @@ class DataLoader:
             'descumprimento_obrigacao': ['Obrigações', 'Obrigaes', 'Descumprimento de Obrigação']
         }
         
-        # Mapear colunas (agora suporta múltiplas opções por campo)
+        # Mapear colunas de forma idempotente
+        # Para cada coluna alvo, verificar se já existe ou precisa mapear
         for new_col, old_cols in column_mapping.items():
+            # Se a coluna alvo já existe - manter como está (idempotente)
+            if new_col in mapped_df.columns:
+                continue
+            
+            # Tentar encontrar alias antigos
             if not isinstance(old_cols, list):
                 old_cols = [old_cols]
+            
+            found = False
             for old_col in old_cols:
-                if old_col in df.columns:
-                    if new_col not in mapped_df.columns:
-                        mapped_df[new_col] = df[old_col]
-                    else:
-                        # Preencher valores faltantes
-                        mapped_df[new_col] = mapped_df[new_col].fillna(df[old_col])
-                    break  # Usar primeira coluna encontrada
+                if old_col in mapped_df.columns:
+                    # Renomear coluna antiga para nome padrão
+                    mapped_df.rename(columns={old_col: new_col}, inplace=True)
+                    found = True
+                    break
+            
+            # Se não encontrou nenhum alias, criar com valor padrão apropriado
+            if not found:
+                if new_col in ['data_entrada', 'data_encerramento']:
+                    mapped_df[new_col] = pd.NaT
+                elif new_col in ['impacto_financeiro', 'valor_causa']:
+                    mapped_df[new_col] = 0.0
+                elif new_col in ['objeto_acao', 'estado', 'nome_cliente']:
+                    mapped_df[new_col] = 'Não Informado'
+                else:
+                    mapped_df[new_col] = None
 
         # Objeto da ação: fallback se ausente ou só nulos (robusto a encoding/variantes no Excel)
         if 'objeto_acao' not in mapped_df.columns or mapped_df['objeto_acao'].isna().all():
@@ -438,13 +397,6 @@ class DataLoader:
                     else:
                         mapped_df['objeto_acao'] = col
                     break
-
-        # Garantir colunas essenciais quando mapeamento não encontrou
-        if len(mapped_df) == 0:
-            mapped_df = df.copy()
-            for k, v in [('objeto_acao', 'Descricao do Tipo de Ação'), ('objeto_acao', 'OBJETO DA AÇÃO'), ('estado', 'Estado'), ('data_entrada', 'Data de Entrada'), ('data_entrada', 'DATA ENTRADA'), ('impacto_financeiro', 'Valor da Causa Atual')]:
-                if v in df.columns and k not in mapped_df.columns:
-                    mapped_df[k] = df[v]
         
         # Buscar numero_processo por padrões alternativos se não foi mapeado
         if 'numero_processo' not in mapped_df.columns or mapped_df['numero_processo'].isna().all():
@@ -484,10 +436,18 @@ class DataLoader:
     def _calculate_derived_fields(self, df: pd.DataFrame) -> pd.DataFrame:
         """Calcula campos derivados necessários para o dashboard"""
         # Tempo de tramitação (em dias)
+        # CORREÇÃO: Garantir que data_entrada seja datetime antes de usar .dt
         if 'data_entrada' in df.columns:
-            hoje = datetime.now()
-            df['tempo_tramitacao'] = (hoje - df['data_entrada']).dt.days
-            df['tempo_tramitacao'] = df['tempo_tramitacao'].fillna(0).astype(int)
+            # Converter para datetime se ainda não for
+            df['data_entrada'] = pd.to_datetime(df['data_entrada'], errors='coerce')
+            # Filtrar apenas linhas com datas válidas
+            df_valid = df[df['data_entrada'].notna()].copy()
+            if len(df_valid) > 0:
+                hoje = datetime.now()
+                df['tempo_tramitacao'] = (hoje - df['data_entrada']).dt.days
+                df['tempo_tramitacao'] = df['tempo_tramitacao'].fillna(0).astype(int)
+            else:
+                df['tempo_tramitacao'] = 0
         else:
             df['tempo_tramitacao'] = 0
 
@@ -526,8 +486,10 @@ class DataLoader:
             df.loc[df['area_interna'].isin(['nan', 'None', '', 'NaN']), 'area_interna'] = 'Não Informado'
 
         # Reiterações: preferir Quantidade de Reiterações (CSV), senão estimar
+        # CORREÇÃO: Conversão segura para evitar erro com strings não numéricas
         if 'reiteracoes_orig' in df.columns:
-            df['reiteracoes'] = df['reiteracoes_orig'].fillna(0).astype(int)
+            # Converter para numérico primeiro, depois para int (resolve erro: invalid literal for int())
+            df['reiteracoes'] = pd.to_numeric(df['reiteracoes_orig'], errors='coerce').fillna(0).astype(int)
         elif 'tempo_tramitacao' in df.columns:
             df['reiteracoes'] = (df['tempo_tramitacao'] / 30).astype(int).clip(upper=20)
         else:
@@ -537,13 +499,17 @@ class DataLoader:
         df['prazo_dias'] = df['tempo_tramitacao'].clip(upper=30) if 'tempo_tramitacao' in df.columns else 30
 
         # Calcular SLA real: diferença entre data_encerramento e data_entrada
+        # CORREÇÃO: Garantir que datas sejam datetime antes de calcular diferença
         if 'data_entrada' in df.columns and 'data_encerramento' in df.columns:
             # Garantir que as datas estejam em formato datetime
             df['data_entrada'] = pd.to_datetime(df['data_entrada'], errors='coerce')
             df['data_encerramento'] = pd.to_datetime(df['data_encerramento'], errors='coerce')
-            # Calcular diferença em dias
-            df['sla_real'] = (df['data_encerramento'] - df['data_entrada']).dt.days
-            df['sla_real'] = df['sla_real'].clip(lower=0)  # Garantir valores não negativos
+            # Calcular diferença em dias apenas para linhas com ambas as datas válidas
+            mask_valid = df['data_entrada'].notna() & df['data_encerramento'].notna()
+            df['sla_real'] = 0.0
+            if mask_valid.any():
+                df.loc[mask_valid, 'sla_real'] = (df.loc[mask_valid, 'data_encerramento'] - df.loc[mask_valid, 'data_entrada']).dt.days
+                df['sla_real'] = df['sla_real'].clip(lower=0)  # Garantir valores não negativos
             df['sla_real'] = df['sla_real'].fillna(0).astype(float)
         else:
             df['sla_real'] = 0.0
@@ -599,6 +565,32 @@ class DataLoader:
             )
         else:
             df['critico'] = False
+
+        # Verificação defensiva: garantir que colunas críticas sempre existam
+        # Isso previne erros 500 quando essas colunas são acessadas em agregações
+        if 'critico' not in df.columns:
+            df['critico'] = False
+        else:
+            df['critico'] = df['critico'].fillna(False).astype(bool)
+        
+        if 'erro_sistemico' not in df.columns:
+            df['erro_sistemico'] = False
+        else:
+            df['erro_sistemico'] = df['erro_sistemico'].fillna(False).astype(bool)
+        
+        if 'reincidencia' not in df.columns:
+            df['reincidencia'] = False
+        else:
+            df['reincidencia'] = df['reincidencia'].fillna(False).astype(bool)
+
+        # Garantir conversão explícita para bool (defesa em profundidade)
+        # Isso garante que os valores sejam realmente do tipo bool e não object
+        if 'critico' in df.columns:
+            df['critico'] = df['critico'].astype(bool)
+        if 'erro_sistemico' in df.columns:
+            df['erro_sistemico'] = df['erro_sistemico'].astype(bool)
+        if 'reincidencia' in df.columns:
+            df['reincidencia'] = df['reincidencia'].astype(bool)
 
         # Manter descumprimento_obrigacao para uso em alertas
         # Remover apenas colunas auxiliares temporárias (mantendo originais para referência se necessário)
